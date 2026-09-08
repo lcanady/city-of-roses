@@ -1,0 +1,12 @@
+        ____     _   _     _____   _____   ____   __  __
+       / __ \___| |_| |   |  ___| |  _  | / ___|  \ \/ /
+      / /_/ / _ \| |_| |  | |___  | |_| | \ \___   \  /
+     / __/ /  __/| |_| |_ | |___  | |_| |  \__ \    \/
+    /_/   \___/ |_|  \_(_)    |___/ |_| |_| |____/
+
+          City of Roses — a World of Darkness MU*
+         A city of crypts, courts, and cold marble.
+
+    Use 'create <character> <password>' to create.
+   Use 'connect <character> <password>' to connect.
+                     Use QUIT to quit.

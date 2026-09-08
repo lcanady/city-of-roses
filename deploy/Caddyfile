@@ -1,0 +1,43 @@
+# City of Roses — game host
+# court.ursamu.io + roses.ursamu.io  (A → 54.184.218.33)
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+court.ursamu.io, roses.ursamu.io {
+	@ws path /ws*
+	handle @ws {
+		reverse_proxy 127.0.0.1:4202 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up Origin {header.Origin}
+			flush_interval -1
+		}
+	}
+
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Origin "{header.Origin}"
+		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, Authorization, X-Socket-Id"
+		header Access-Control-Allow-Credentials "true"
+		header Access-Control-Max-Age "86400"
+		header Vary Origin
+		respond 204
+	}
+
+	handle {
+		header Access-Control-Allow-Origin "{header.Origin}"
+		header Access-Control-Allow-Credentials "true"
+		header Vary Origin
+		header -X-Frame-Options
+		header Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: https: http:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss: https://court.ursamu.io https://roses.ursamu.io https://*.vercel.app; frame-ancestors https://court.ursamu.io https://roses.ursamu.io https://*.vercel.app 'self'; form-action 'self'"
+		encode gzip
+		reverse_proxy 127.0.0.1:4203 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}

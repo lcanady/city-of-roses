@@ -1,0 +1,119 @@
+{
+  "server": {
+    "standaloneTelnet": true,
+    "telnet": 4201,
+    "wsPort": 4202,
+    "ws": 4202,
+    "port": 4203,
+    "http": 4203,
+    "apiPort": 4203,
+    "db": "data/typegraph.db",
+    "corsOrigins": "https://court.ursamu.io,https://roses.ursamu.io,https://*.ursamu.io,http://localhost:5173,http://127.0.0.1:5173",
+    "plugins": [
+      "@ursamu/help",
+      "@ursamu/channels",
+      "@ursamu/builder",
+      "@ursamu/bbs",
+      "@ursamu/mail",
+      "@ursamu/wiki",
+      "@ursamu/jobs",
+      "@ursamu/combat",
+      "@ursamu/wod20th",
+      "@ursamu/web",
+      "@ursamu/site"
+    ]
+  },
+  "game": {
+    "name": "City of Roses",
+    "description": "A World of Darkness 20th Anniversary MU* set in the rose-quartered city.",
+    "version": "0.1.0",
+    "playerStart": "1",
+    "text": {
+      "connect": "text/default_connect.txt",
+      "welcome": "text/welcome.md"
+    },
+    "layout": {
+      "header": "[center(%ch%cy%0%cn,%1,%cg=%cn)]",
+      "divider": "[center(%ch%cy%0%cn,%1,%cg-%cn)]",
+      "footer": "[repeat(%cg=%cn,%1)]"
+    },
+    "build": "wod20th"
+  },
+  "plugins": {
+    "mail": {
+      "db": "mail"
+    },
+    "wiki": {
+      "db": "wiki"
+    },
+    "bbs": {
+      "db": {
+        "bboards": "bboard",
+        "posts": "bboard_posts"
+      }
+    },
+    "site": {
+      "serveRoot": true,
+      "title": "City of Roses",
+      "skin": "default",
+      "plainBg": true,
+      "playClient": "wss://roses.ursamu.io/ws?embed=1",
+      "nav": [
+        {
+          "id": "home",
+          "label": "Home",
+          "href": "/",
+          "order": 10
+        },
+        {
+          "id": "wiki",
+          "label": "Wiki",
+          "href": "/wiki/",
+          "order": 20
+        },
+        {
+          "id": "help",
+          "label": "Help",
+          "href": "/help/",
+          "order": 30
+        },
+        {
+          "id": "chargen",
+          "label": "Chargen",
+          "href": "/chargen",
+          "order": 40
+        },
+        {
+          "id": "play",
+          "label": "Play",
+          "href": "/play",
+          "order": 50
+        }
+      ]
+    },
+    "globals": {
+      "theme": {
+        "look": {
+          "roleTags": [
+            {
+              "flag": "superuser",
+              "display": "%ch%cy<Root>%cn"
+            },
+            {
+              "flag": "wizard",
+              "display": "%ch%cc(Wizard)%cn"
+            },
+            {
+              "flag": "admin",
+              "display": "%ch%cg(Admin)%cn"
+            },
+            {
+              "flag": "staff",
+              "display": "%ch%cw(Staff)%cn"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

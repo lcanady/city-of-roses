@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@ursamu/mush": "./tools/ursamu-shim.ts",
+    "ursamu": "./tools/ursamu-shim.ts"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "globals",
+  "version": "1.2.0",
+  "description": "Rhost-style formatting — look, who, where, page, mail, score, examine, inventory, +finger, +staff, ooc, +namecolor, @emit",
+  "author": "Jupiter @ The Price Of Power",
+  "contributors": ["lcanady (https://github.com/lcanady)"],
+  "license": "MIT",
+  "ursamu": ">=2.2.0",
+  "main": "index.ts"
+}
