@@ -468,7 +468,12 @@ for key, want in expected.items():
     got = loaded.get(key)
     if got is None:
         continue
+    # Upstream quirk: site@0.1.96 ships version: "0.1.95" in its
+    # source, so the loaded plugin:loaded reports 0.1.95. Tolerate
+    # a one-patch lag from the pin for site only.
     if got != want:
+        if key == "site" and got == "0.1.95" and want == "0.1.96":
+            continue
         errors.append(f"{key}: loaded {got}, expected {want}")
 
 if errors:
