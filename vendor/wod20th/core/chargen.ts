@@ -8,7 +8,14 @@ import {
 } from "../splats/vtm/data/generation.ts";
 import { resolveTrait, didYouMean } from "./resolver.ts";
 import { validateStep, freebiesCost } from "./validator.ts";
-import { ATTR_CATEGORY_NAMES, ABIL_CATEGORY_NAMES, canonicalAttr, canonicalAbil, SPECIALTY_OVERRIDE_LIST } from "./attributes.ts";
+import {
+  ATTR_BASE,
+  ATTR_CATEGORY_NAMES,
+  ABIL_CATEGORY_NAMES,
+  canonicalAttr,
+  canonicalAbil,
+  SPECIALTY_OVERRIDE_LIST,
+} from "./attributes.ts";
 import type { AttributeGroup, AbilityGroup } from "./attributes.ts";
 
 export interface SetResult {
@@ -37,8 +44,17 @@ function stripMushCodes(s: string): string {
  * returns the affected step's budget.
  */
 export function applySet(char: IWoDChar, rawTrait: string, rawValue: string): SetResult {
+  // Trait-side qualifier: Contacts(Street Cops)=3  or  Language(Spanish)=1
+  const strippedTrait = stripMushCodes(rawTrait).trim();
+  const { base: traitBase, detail: traitDetail } = splitNameDetail(
+    strippedTrait,
+  );
+  const traitName = traitBase || strippedTrait;
+  const value = stripMushCodes(rawValue).trim();
+  if (!value) return { ok: false, message: "Value cannot be empty." };
+
   // Friendly redirect for the retired composite syntax.
-  const lowerTrait = rawTrait.trim().toLowerCase();
+  const lowerTrait = traitName.toLowerCase();
   if (lowerTrait === "attrs.priority" || lowerTrait === "attributes.priority") {
     return {
       ok: false,
@@ -52,12 +68,46 @@ export function applySet(char: IWoDChar, rawTrait: string, rawValue: string): Se
     };
   }
 
-  const res = resolveTrait(char, rawTrait);
+  // Merit-as-trait: Language(Spanish)=1  or  Language=Spanish
+  // Do NOT steal pure-dot sets (Pure Breed=2, Kinfolk=3) -- those are bgs.
+  {
+    const splat = SplatRegistry.get(char.splat);
+    const mdef = findMeritDef(splat?.merits, traitName);
+    const pureDots = /^\d+$/.test(value);
+    if (mdef && (!pureDots || traitDetail)) {
+      const prev = validateStep(char, 4);
+      if (!prev.complete) {
+        return {
+          ok: false,
+          message: "Step 4 is not complete. Finish it first.",
+          budget: prev,
+        };
+      }
+      // Language(Spanish)=1  →  "Language(Spanish)"
+      // Language=Spanish     →  "Language(Spanish)" when needsDetail
+      let spec: string;
+      if (traitDetail) {
+        spec = `${mdef.name}(${traitDetail})`;
+      } else if (mdef.needsDetail) {
+        spec = `${mdef.name}(${value})`;
+      } else {
+        spec = mdef.name;
+      }
+      return applyMerit(char, spec);
+    }
+  }
+
+  const res = resolveTrait(char, traitName);
 
   if (!res.found) {
-    const hint = didYouMean(rawTrait);
+    const hint = didYouMean(traitName);
     const hintStr = hint ? ` ${hint}` : "";
-    return { ok: false, message: `Unknown trait "${rawTrait}".${hintStr} Type +chargen/traits for valid names.` };
+    return {
+      ok: false,
+      message:
+        `Unknown trait "${traitName}".${hintStr} ` +
+        `Type +chargen/traits for valid names.`,
+    };
   }
 
   // Step gate: cannot write step N if step N-1 is incomplete
@@ -73,22 +123,35 @@ export function applySet(char: IWoDChar, rawTrait: string, rawValue: string): Se
     }
   }
 
-  const value = rawValue.trim();
-  if (!value) return { ok: false, message: "Value cannot be empty." };
-
   // -- Apply by category ----------------------------------------------------
 
   if (res.category === "string-free") {
-    const clean = stripMushCodes(value);
+    const clean = value;
     if (clean.length > MAX_FREE_TEXT_LEN) {
-      return { ok: false, message: `${rawTrait} is too long (max ${MAX_FREE_TEXT_LEN} characters).` };
+      return {
+        ok: false,
+        message:
+          `${traitName} is too long (max ${MAX_FREE_TEXT_LEN} characters).`,
+      };
     }
     setNestedField(char, res.field, clean);
-    return { ok: true, message: `Set ${rawTrait} to "${clean}".`, budget: validateStep(char, res.step) };
+    return {
+      ok: true,
+      message: `Set ${traitName} to "${clean}".`,
+      budget: validateStep(char, res.step),
+    };
+  }
+
+  // Gift by name: +chargen/set gift=Persuasion  OR  +chargen/set Persuasion=1
+  if (res.category === "gift-auto") {
+    const giftName = res.parentTrait && isGiftToggleValue(value)
+      ? res.parentTrait
+      : value;
+    return applyGiftAuto(char, giftName);
   }
 
   if (res.category === "string-enum") {
-    // Gift slots: populate enumValues dynamically from char state
+    // Explicit gifts.breed=Name still works
     if (res.field.startsWith("gifts.")) {
       return applyGiftSlot(char, res.field, value);
     }
@@ -103,7 +166,9 @@ export function applySet(char: IWoDChar, rawTrait: string, rawValue: string): Se
     if (!matched) {
       return {
         ok: false,
-        message: `"${value}" is not valid for ${rawTrait}. Valid values: ${enumValues.join(", ")}`,
+        message:
+          `"${value}" is not valid for ${traitName}. ` +
+          `Valid values: ${enumValues.join(", ")}`,
       };
     }
     setNestedField(char, res.field, matched);
@@ -115,11 +180,19 @@ export function applySet(char: IWoDChar, rawTrait: string, rawValue: string): Se
     if (res.field === "clan") {
       applyVtmClan(char, matched);
     }
-    return { ok: true, message: `Set ${rawTrait} to "${matched}".`, budget: validateStep(char, res.step) };
+    return {
+      ok: true,
+      message: `Set ${traitName} to "${matched}".`,
+      budget: validateStep(char, res.step),
+    };
   }
 
   if (res.category === "merit") {
-    return applyMerit(char, value);
+    // merit=Language(Spanish)  OR  Language(Spanish)=1 (bare gift-style)
+    const meritRaw = traitDetail
+      ? `${value}(${traitDetail})`
+      : value;
+    return applyMerit(char, meritRaw);
   }
 
   if (res.category === "flaw") {
@@ -129,23 +202,73 @@ export function applySet(char: IWoDChar, rawTrait: string, rawValue: string): Se
   if (res.category === "number") {
     // Pool traits (rage/gnosis/willpower) are seeded from tables; use +chargen/spend to increase.
     if (res.field === "rage" || res.field === "gnosis" || res.field === "willpower") {
-      return { ok: false, message: `Use %ch+chargen/spend ${rawTrait}=<dots>%cn to raise ${rawTrait} with freebie points.` };
+      return {
+        ok: false,
+        message:
+          `Use %ch+chargen/spend ${traitName}=<dots>%cn to raise ` +
+          `${traitName} with freebie points.`,
+      };
     }
 
-    const n = parseInt(value, 10);
-    if (isNaN(n) || n < 0 || !Number.isInteger(Number(value))) {
-      return { ok: false, message: `${rawTrait} requires a non-negative integer.` };
+    // Value may still be "3: alt detail"; trait paren wins when both set.
+    const { dots: rawDots, detail: valueDetail } = splitDotsDetail(value);
+    const bgDetail = traitDetail ?? valueDetail;
+    const n = parseInt(rawDots, 10);
+    if (isNaN(n) || n < 0 || !Number.isInteger(Number(rawDots))) {
+      return {
+        ok: false,
+        message: `${traitName} requires a non-negative integer.`,
+      };
     }
     const min = res.min ?? 0;
     const max = res.max ?? 5;
     // During steps 1-4, enforce stepMax; step 5 freebies use max
-    const cap = char.chargenStep < 6 && res.stepMax !== undefined ? res.stepMax : max;
-    if (n < min) return { ok: false, message: `${rawTrait} minimum is ${min}.` };
-    if (n > cap) {
-      const hint = cap < max ? ` (use +chargen/spend to raise above ${cap} with freebie points)` : "";
-      return { ok: false, message: `${rawTrait} maximum at this stage is ${cap}.${hint}` };
+    const cap = char.chargenStep < 6 && res.stepMax !== undefined
+      ? res.stepMax
+      : max;
+    if (n < min) {
+      return { ok: false, message: `${traitName} minimum is ${min}.` };
     }
-    setNestedField(char, res.field, n);
+    if (n > cap) {
+      const hint = cap < max
+        ? ` (use +chargen/spend to raise above ${cap} with freebie points)`
+        : "";
+      return {
+        ok: false,
+        message: `${traitName} maximum at this stage is ${cap}.${hint}`,
+      };
+    }
+
+    // Attributes: player sets FINAL rating (1-5). DB stores extra above
+    // ATTR_BASE so sheet/rolls still do base+extra.
+    let stored = n;
+    if (res.field.startsWith("attributes.")) {
+      stored = n - ATTR_BASE;
+    }
+    setNestedField(char, res.field, stored);
+
+    // Optional background focus: Contacts(Street Cops)=3
+    let detailMsg = "";
+    if (res.field.startsWith("backgrounds.")) {
+      const bgName = res.field.slice("backgrounds.".length);
+      if (bgDetail) {
+        const clean = bgDetail.trim();
+        if (clean.length > MAX_FREE_TEXT_LEN) {
+          return {
+            ok: false,
+            message: `Detail too long (max ${MAX_FREE_TEXT_LEN}).`,
+          };
+        }
+        char.backgroundDetails = {
+          ...(char.backgroundDetails ?? {}),
+          [bgName]: clean,
+        };
+        detailMsg = ` (${clean})`;
+      } else if (n === 0 && char.backgroundDetails?.[bgName]) {
+        delete char.backgroundDetails[bgName];
+      }
+    }
+
     // VtM: re-derive WP/Humanity/generation pools when virtues or the
     // Generation background move.
     if (
@@ -154,7 +277,11 @@ export function applySet(char: IWoDChar, rawTrait: string, rawValue: string): Se
     ) {
       seedVtmDerived(char);
     }
-    return { ok: true, message: `Set ${rawTrait} to ${n}.`, budget: validateStep(char, res.step) };
+    return {
+      ok: true,
+      message: `Set ${traitName}${detailMsg} to ${n}.`,
+      budget: validateStep(char, res.step),
+    };
   }
 
   if (res.category === "specialty") {
@@ -227,13 +354,20 @@ export function applySpend(char: IWoDChar, rawTrait: string, rawDots: string): S
     return { ok: false, message: `Not enough freebies (need ${cost}, have ${char.freebiesRemaining}).` };
   }
 
-  // Apply the dot increase
+  // Apply the dot increase. Attributes store extras above ATTR_BASE;
+  // spend raises the FINAL rating (player-facing max is res.max).
   const current = (getNestedField(char, res.field) as number) ?? 0;
-  const next = current + dots;
+  const isAttr = res.field.startsWith("attributes.");
+  const currentTotal = isAttr ? current + ATTR_BASE : current;
+  const nextTotal = currentTotal + dots;
   const hardMax = res.max ?? 5;
-  if (next > hardMax) {
-    return { ok: false, message: `${rawTrait} cannot exceed ${hardMax}.` };
+  if (nextTotal > hardMax) {
+    return {
+      ok: false,
+      message: `${rawTrait} cannot exceed ${hardMax}.`,
+    };
   }
+  const next = isAttr ? nextTotal - ATTR_BASE : nextTotal;
 
   setNestedField(char, res.field, next);
   char.freebiesRemaining -= cost;
@@ -245,11 +379,12 @@ export function applySpend(char: IWoDChar, rawTrait: string, rawDots: string): S
     cost,
     timestamp: Date.now(),
   });
+  syncFreebiesDone(char);
 
   return {
     ok: true,
     message: `Spent ${cost} freebies on ${rawTrait} (+${dots} dots). ${char.freebiesRemaining} remaining.`,
-    budget: validateStep(char, 5),
+    budget: validateStep(char, 6),
   };
 }
 
@@ -270,12 +405,55 @@ export function applyUnspend(char: IWoDChar, rawTrait: string): SetResult {
 
   const current = (getNestedField(char, res.field) as number) ?? 0;
   setNestedField(char, res.field, Math.max(0, current - entry.dots));
+  syncFreebiesDone(char);
 
   return {
     ok: true,
     message: `Removed ${entry.cost} freebie spend on ${rawTrait}. ${char.freebiesRemaining} remaining.`,
-    budget: validateStep(char, 5),
+    budget: validateStep(char, 6),
   };
+}
+
+/**
+ * Mark Step 6 freebies finished while keeping leftover points unspent.
+ * New players often leave freebies on the table; this is the explicit exit.
+ */
+export function applyFreebiesDone(char: IWoDChar): SetResult {
+  if (char.chargenStep < 6) {
+    return {
+      ok: false,
+      message: "Finish Steps 1-5 first, then use +chargen/done in Step 6.",
+    };
+  }
+  if (char.freebiesRemaining < 0) {
+    return {
+      ok: false,
+      message: "You overspent freebies. Undo with +chargen/unspend first.",
+    };
+  }
+  char.freebiesDone = true;
+  const left = char.freebiesRemaining;
+  const tip = left > 0
+    ? ` Leaving ${left} unspent (ok).`
+    : " Bank is empty.";
+  return {
+    ok: true,
+    message:
+      `Freebies closed.${tip}%r` +
+      `This is NOT a staff submit.%r` +
+      `Next: %ch+sheet%cn to review, then ` +
+      `%ch+chargen/submit%cn to send to staff.`,
+    budget: validateStep(char, 6),
+  };
+}
+
+/** Empty bank => done; leftover without confirm => not done. */
+function syncFreebiesDone(char: IWoDChar): void {
+  if ((char.freebiesRemaining ?? 0) <= 0) {
+    char.freebiesDone = true;
+  } else {
+    char.freebiesDone = false;
+  }
 }
 
 // -- Step advancement -------------------------------------------------------
@@ -404,40 +582,151 @@ function applyTribe(char: IWoDChar, value: string): SetResult {
   return { ok: true, message: `Set tribe to "${tribe.displayName}".`, budget: validateStep(char, 1) };
 }
 
-function applyGiftSlot(char: IWoDChar, field: string, value: string): SetResult {
+/** Values that mean "take this gift" when the trait itself is the gift name. */
+function isGiftToggleValue(v: string): boolean {
+  return /^(1|on|yes|true|x|\*|take)?$/i.test(v.trim());
+}
+
+/**
+ * Pick a starting gift by name; auto-fills breed/auspice/tribe slot.
+ * +chargen/set gift=Mother's Touch
+ */
+function applyGiftAuto(char: IWoDChar, rawName: string): SetResult {
+  const splat = SplatRegistry.get(char.splat);
+  const ext = splat?.ext as IWtaSplatExt | undefined;
+  if (!ext) {
+    return { ok: false, message: "Gifts not applicable for this splat." };
+  }
+  if (!char.breed || !char.auspice || !char.tribe) {
+    return {
+      ok: false,
+      message: "Set breed, auspice, and tribe before choosing gifts.",
+    };
+  }
+
+  const name = stripMushCodes(rawName).trim();
+  if (!name) {
+    return {
+      ok: false,
+      message: "Usage: +chargen/set gift=<Gift Name>",
+    };
+  }
+
+  const breedDef = ext.breeds?.find((b) => b.id === char.breed);
+  const auspiceDef = ext.auspices?.find((a) => a.id === char.auspice);
+  const tribeDef = ext.tribes?.find((t) => t.id === char.tribe);
+  const pools: Array<{ slot: "breed" | "auspice" | "tribe"; list: string[] }> = [
+    { slot: "breed", list: breedDef?.beginningGifts ?? [] },
+    { slot: "auspice", list: auspiceDef?.beginningGifts ?? [] },
+    { slot: "tribe", list: tribeDef?.beginningGifts ?? [] },
+  ];
+
+  const lower = name.toLowerCase();
+  // Exact match first, then unique prefix across all three pools.
+  type Hit = { slot: "breed" | "auspice" | "tribe"; gift: string };
+  const hits: Hit[] = [];
+  for (const { slot, list } of pools) {
+    for (const g of list) {
+      if (
+        g.toLowerCase() === lower ||
+        g.toLowerCase().startsWith(lower)
+      ) {
+        hits.push({ slot, gift: g });
+      }
+    }
+  }
+  // Dedupe same gift name appearing in multiple pools
+  const byName = new Map<string, Hit[]>();
+  for (const h of hits) {
+    const k = h.gift.toLowerCase();
+    const arr = byName.get(k) ?? [];
+    arr.push(h);
+    byName.set(k, arr);
+  }
+
+  if (byName.size === 0) {
+    const avail = pools.flatMap((p) => p.list).join(", ");
+    return {
+      ok: false,
+      message:
+        `"${name}" is not in your starting gift pools. ` +
+        `Available: ${avail}. See %ch+chargen/giftlist%cn.`,
+    };
+  }
+  if (byName.size > 1) {
+    const names = [...byName.keys()].map((k) =>
+      byName.get(k)![0].gift
+    );
+    return {
+      ok: false,
+      message: `Ambiguous gift "${name}". Try: ${names.join(", ")}`,
+    };
+  }
+
+  const group = [...byName.values()][0];
+  // Prefer unfilled slot among matches for this gift
+  const gifts = char.gifts ?? ["", "", ""];
+  const slotIdx = { breed: 0, auspice: 1, tribe: 2 } as const;
+  const pick = group.find((h) => !gifts[slotIdx[h.slot]]) ??
+    group[0];
+
+  return applyGiftSlot(char, `gifts.${pick.slot}`, pick.gift);
+}
+
+function applyGiftSlot(
+  char: IWoDChar,
+  field: string,
+  value: string,
+): SetResult {
   const slot = field.split(".")[1]; // "breed" | "auspice" | "tribe"
   const splat = SplatRegistry.get(char.splat);
   const ext = splat?.ext as IWtaSplatExt | undefined;
-  if (!ext) return { ok: false, message: "Gifts not applicable for this splat." };
+  if (!ext) {
+    return { ok: false, message: "Gifts not applicable for this splat." };
+  }
 
   let pool: string[] = [];
   if (slot === "breed") {
+    if (!char.breed) return { ok: false, message: "Set breed first." };
     const breedDef = ext.breeds?.find((b) => b.id === char.breed);
     pool = breedDef?.beginningGifts ?? [];
-    if (!char.breed) return { ok: false, message: "Set breed first." };
   } else if (slot === "auspice") {
+    if (!char.auspice) {
+      return { ok: false, message: "Set auspice first." };
+    }
     const auspiceDef = ext.auspices?.find((a) => a.id === char.auspice);
     pool = auspiceDef?.beginningGifts ?? [];
-    if (!char.auspice) return { ok: false, message: "Set auspice first." };
   } else if (slot === "tribe") {
+    if (!char.tribe) return { ok: false, message: "Set tribe first." };
     const tribeDef = ext.tribes?.find((t) => t.id === char.tribe);
     pool = tribeDef?.beginningGifts ?? [];
-    if (!char.tribe) return { ok: false, message: "Set tribe first." };
   }
 
-  const matched = pool.find((g) => g.toLowerCase() === value.toLowerCase());
-  if (!matched) {
+  const lower = value.toLowerCase().trim();
+  const matched = pool.find((g) => g.toLowerCase() === lower) ??
+    pool.filter((g) => g.toLowerCase().startsWith(lower));
+  const gift = Array.isArray(matched)
+    ? (matched.length === 1 ? matched[0] : undefined)
+    : matched;
+  if (!gift) {
+    const hint = Array.isArray(matched) && matched.length > 1
+      ? ` Ambiguous — try: ${matched.join(", ")}`
+      : ` Available: ${pool.join(", ")}`;
     return {
       ok: false,
-      message: `"${value}" is not in the ${slot} gift pool. Available: ${pool.join(", ")}`,
+      message: `"${value}" is not in the ${slot} gift pool.${hint}`,
     };
   }
 
   char.gifts = char.gifts ?? ["", "", ""];
   const idx = slot === "breed" ? 0 : slot === "auspice" ? 1 : 2;
-  char.gifts[idx] = matched;
+  char.gifts[idx] = gift;
 
-  return { ok: true, message: `Set ${slot} gift to "${matched}".`, budget: validateStep(char, 4) };
+  return {
+    ok: true,
+    message: `Set ${slot} gift to "${gift}".`,
+    budget: validateStep(char, 5),
+  };
 }
 
 function applySpecialty(
@@ -451,7 +740,7 @@ function applySpecialty(
   const isAbil = !!canonicalAbil(parent);
 
   if (isAttr) {
-    const total = 1 + (char.attributes[parent] ?? 0);
+    const total = ATTR_BASE + (char.attributes[parent] ?? 0);
     if (total < 4) {
       return { ok: false, message: `${parent} must be at least 4 to assign a specialty (currently ${total}).` };
     }
@@ -508,50 +797,219 @@ function applyComposite(char: IWoDChar, field: string, value: string): SetResult
 const MAX_FLAW_BONUS = 7;
 
 /**
- * Toggle-adds or removes a merit by name.
- * Merits cost their defined freebie value; stored in char.merits.
- * Adding a second time removes it and refunds.
+ * Toggle-adds or removes a merit.
+ * Qualified: merit=Language: Spanish  → key "Language (Spanish)"
+ * Stackable merits (Language) can be taken once per detail.
  */
 function applyMerit(char: IWoDChar, rawName: string): SetResult {
   const splat = SplatRegistry.get(char.splat);
   if (!splat?.merits?.length) {
-    return { ok: false, message: `No merit list defined for ${splat?.name ?? char.splat}. See staff for custom merits.` };
+    return {
+      ok: false,
+      message:
+        `No merit list defined for ${splat?.name ?? char.splat}. ` +
+        `See staff for custom merits.`,
+    };
   }
-  const name = stripMushCodes(rawName).trim();
-  const lower = name.toLowerCase();
+
+  const { base, detail } = splitNameDetail(
+    stripMushCodes(rawName).trim(),
+  );
+  if (!base) {
+    return {
+      ok: false,
+      message: "Usage: +chargen/set merit=<Name>  or  merit=Name: detail",
+    };
+  }
+
+  const lower = base.toLowerCase();
   const def = splat.merits.find((m) => m.name.toLowerCase() === lower) ??
     splat.merits.find((m) => m.name.toLowerCase().startsWith(lower));
   if (!def) {
-    const names = splat.merits.map((m) => `${m.name} (${m.cost}pt)`).join(", ");
-    return { ok: false, message: `Unknown merit "${name}". Available: ${names}` };
+    return {
+      ok: false,
+      message:
+        `Unknown merit "${base}". See %ch+chargen/meritlist%cn.`,
+    };
   }
 
   char.merits = char.merits ?? {};
+  const label = def.detailLabel ?? "detail";
 
-  // Toggle: if already present, remove and refund
-  if (def.name in char.merits) {
-    const cost = char.merits[def.name];
-    delete char.merits[def.name];
-    char.freebiesRemaining += cost;
-    // Remove log entry
-    const logIdx = [...char.freebiesLog].reverse().findIndex((e) => e.trait === `merit.${def.name}`);
-    if (logIdx !== -1) char.freebiesLog.splice(char.freebiesLog.length - 1 - logIdx, 1);
-    return { ok: true, message: `Removed merit "${def.name}". ${char.freebiesRemaining} freebies remaining.`, budget: validateStep(char, 4) };
+  // Require qualifier when the merit needs one
+  if (def.needsDetail && !detail) {
+    // Allow bare name only to remove a sole instance
+    const ownedKeys = Object.keys(char.merits).filter((k) =>
+      meritBaseName(k).toLowerCase() === def.name.toLowerCase()
+    );
+    if (ownedKeys.length === 1) {
+      return removeMeritKey(char, ownedKeys[0]!);
+    }
+    if (ownedKeys.length > 1) {
+      return {
+        ok: false,
+        message:
+          `Which ${def.name}? Owned: ${ownedKeys.join(", ")}. ` +
+          `Remove with merit=${def.name}: <${label}>`,
+      };
+    }
+    return {
+      ok: false,
+      message:
+        `${def.name} needs a ${label}. ` +
+        `Example: %ch+chargen/set merit=${def.name}: <${label}>%cn`,
+    };
   }
 
-  // Guard: data integrity -- merit cost must be positive
+  const key = detail
+    ? `${def.name} (${stripMushCodes(detail).trim()})`
+    : def.name;
+
+  if (key.length > 64) {
+    return { ok: false, message: "Merit name/detail too long (max 64)." };
+  }
+
+  // Toggle off exact key
+  if (key in char.merits) {
+    return removeMeritKey(char, key);
+  }
+
+  // Non-stackable: replacing detail updates in place (refund old, charge new)
+  if (detail && !def.stackable) {
+    const prior = Object.keys(char.merits).find((k) =>
+      meritBaseName(k).toLowerCase() === def.name.toLowerCase()
+    );
+    if (prior) {
+      const r = removeMeritKey(char, prior);
+      if (!r.ok) return r;
+    }
+  }
+
   if (def.cost < 1) {
-    return { ok: false, message: `Merit "${def.name}" has an invalid cost (${def.cost}). Contact staff.` };
+    return {
+      ok: false,
+      message:
+        `Merit "${def.name}" has an invalid cost (${def.cost}). ` +
+        `Contact staff.`,
+    };
+  }
+  if (def.cost > char.freebiesRemaining) {
+    return {
+      ok: false,
+      message:
+        `"${def.name}" costs ${def.cost} freebie pts -- ` +
+        `you have ${char.freebiesRemaining}.`,
+    };
   }
 
-  // Add: check freebies
-  if (def.cost > char.freebiesRemaining) {
-    return { ok: false, message: `"${def.name}" costs ${def.cost} freebie pts -- you have ${char.freebiesRemaining}.` };
-  }
-  char.merits[def.name] = def.cost;
+  char.merits[key] = def.cost;
   char.freebiesRemaining -= def.cost;
-  char.freebiesLog.push({ trait: `merit.${def.name}`, dots: 1, cost: def.cost, timestamp: Date.now() });
-  return { ok: true, message: `Added merit "${def.name}" (${def.cost} pt). ${char.freebiesRemaining} freebies remaining.`, budget: validateStep(char, 4) };
+  char.freebiesLog.push({
+    trait: `merit.${key}`,
+    dots: 1,
+    cost: def.cost,
+    timestamp: Date.now(),
+  });
+  syncFreebiesDone(char);
+  return {
+    ok: true,
+    message:
+      `Added merit "${key}" (${def.cost} pt). ` +
+      `${char.freebiesRemaining} freebies remaining.`,
+    budget: validateStep(char, 5),
+  };
+}
+
+function removeMeritKey(char: IWoDChar, key: string): SetResult {
+  char.merits = char.merits ?? {};
+  if (!(key in char.merits)) {
+    return { ok: false, message: `You don't have merit "${key}".` };
+  }
+  const cost = char.merits[key]!;
+  delete char.merits[key];
+  char.freebiesRemaining += cost;
+  const logIdx = [...char.freebiesLog].reverse()
+    .findIndex((e) => e.trait === `merit.${key}`);
+  if (logIdx !== -1) {
+    char.freebiesLog.splice(char.freebiesLog.length - 1 - logIdx, 1);
+  }
+  syncFreebiesDone(char);
+  return {
+    ok: true,
+    message:
+      `Removed merit "${key}". ` +
+      `${char.freebiesRemaining} freebies remaining.`,
+    budget: validateStep(char, 5),
+  };
+}
+
+/** "Language (Spanish)" → "Language" */
+function meritBaseName(key: string): string {
+  const m = key.match(/^(.+?)\s*\([^)]*\)\s*$/);
+  return m ? m[1]!.trim() : key.trim();
+}
+
+function findMeritDef(
+  merits: { name: string }[] | undefined,
+  raw: string,
+): { name: string; needsDetail?: boolean; stackable?: boolean } | undefined {
+  if (!merits?.length) return undefined;
+  const lower = raw.trim().toLowerCase();
+  return merits.find((m) => m.name.toLowerCase() === lower) ??
+    merits.find((m) => m.name.toLowerCase().startsWith(lower));
+}
+
+/**
+ * Split "Language: Spanish", "Language/Spanish", "Language (Spanish)".
+ */
+function splitNameDetail(raw: string): { base: string; detail?: string } {
+  const s = raw.trim();
+  if (!s) return { base: "" };
+
+  const paren = s.match(/^(.+?)\s*\((.+)\)\s*$/);
+  if (paren) {
+    return { base: paren[1]!.trim(), detail: paren[2]!.trim() };
+  }
+
+  const colon = s.indexOf(":");
+  if (colon > 0) {
+    return {
+      base: s.slice(0, colon).trim(),
+      detail: s.slice(colon + 1).trim() || undefined,
+    };
+  }
+
+  // Slash only when not part of a normal name (rare); prefer after first word
+  // "Camp Membership/Warders" — allow
+  const slash = s.indexOf("/");
+  if (slash > 0) {
+    return {
+      base: s.slice(0, slash).trim(),
+      detail: s.slice(slash + 1).trim() || undefined,
+    };
+  }
+
+  return { base: s };
+}
+
+/** "3: street dealers" or "3/harbor" → dots + optional detail */
+function splitDotsDetail(raw: string): { dots: string; detail?: string } {
+  const s = raw.trim();
+  const colon = s.indexOf(":");
+  if (colon > 0 && /^\d+$/.test(s.slice(0, colon).trim())) {
+    return {
+      dots: s.slice(0, colon).trim(),
+      detail: s.slice(colon + 1).trim() || undefined,
+    };
+  }
+  const slash = s.indexOf("/");
+  if (slash > 0 && /^\d+$/.test(s.slice(0, slash).trim())) {
+    return {
+      dots: s.slice(0, slash).trim(),
+      detail: s.slice(slash + 1).trim() || undefined,
+    };
+  }
+  return { dots: s };
 }
 
 /**
@@ -587,10 +1045,12 @@ function applyFlaw(char: IWoDChar, rawName: string): SetResult {
     if (char.freebiesRemaining < bonus) {
       // Freebies already spent down -- deduct what we can, warn player
       char.freebiesRemaining = 0;
-      return { ok: true, message: `Removed flaw "${def.name}". Warning: freebie bonus already spent; remaining clamped to 0.`, budget: validateStep(char, 1) };
+      syncFreebiesDone(char);
+      return { ok: true, message: `Removed flaw "${def.name}". Warning: freebie bonus already spent; remaining clamped to 0.`, budget: validateStep(char, 5) };
     }
     char.freebiesRemaining -= bonus;
-    return { ok: true, message: `Removed flaw "${def.name}". ${char.freebiesRemaining} freebies remaining.`, budget: validateStep(char, 1) };
+    syncFreebiesDone(char);
+    return { ok: true, message: `Removed flaw "${def.name}". ${char.freebiesRemaining} freebies remaining.`, budget: validateStep(char, 5) };
   }
 
   // Add: check total flaw bonus cap
@@ -603,7 +1063,8 @@ function applyFlaw(char: IWoDChar, rawName: string): SetResult {
   }
   char.flaws[def.name] = def.bonus;
   char.freebiesRemaining += def.bonus;
-  return { ok: true, message: `Added flaw "${def.name}" (+${def.bonus} freebie pt${def.bonus !== 1 ? "s" : ""}). ${char.freebiesRemaining} freebies remaining.`, budget: validateStep(char, 1) };
+  syncFreebiesDone(char);
+  return { ok: true, message: `Added flaw "${def.name}" (+${def.bonus} freebie pt${def.bonus !== 1 ? "s" : ""}). ${char.freebiesRemaining} freebies remaining.`, budget: validateStep(char, 5) };
 }
 
 // -- Notes (+notes/set, +notes/del, +notes/public, +notes/private) ---------

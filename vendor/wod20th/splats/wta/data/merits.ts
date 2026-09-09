@@ -30,13 +30,30 @@ export const WTA_MERITS: IMeritDef[] = [
   { name: "Computer Aptitude",     cost: 1, category: "Mental", notes: "+1 die on Computer rolls; no penalty for unfamiliar systems." },
   { name: "Concentration",         cost: 1, category: "Mental", notes: "Ignore distractions; +1 die on Mental rolls when under stress." },
   { name: "Expert Driver",         cost: 1, category: "Mental", notes: "+2 dice on Vehicle rolls; stunt maneuvers at -1 difficulty." },
-  { name: "Language",              cost: 1, category: "Mental", notes: "Know one additional language fluently." },
+  {
+    name: "Language",
+    cost: 1,
+    category: "Mental",
+    notes: "Know one additional language fluently. " +
+      "Set: merit=Language: Spanish (stackable).",
+    needsDetail: true,
+    detailLabel: "language",
+    stackable: true,
+  },
   { name: "Lightning Calculator",  cost: 1, category: "Mental", notes: "Instantly perform complex math; +2 dice on Science/Finance rolls." },
   { name: "Mechanical Aptitude",   cost: 1, category: "Mental", notes: "+2 dice on Repair/Crafts (mechanical) rolls." },
   { name: "Time Sense",            cost: 1, category: "Mental", notes: "Know the time to within a minute without a watch." },
   { name: "Crack Driver",          cost: 1, category: "Mental", notes: "Drive at insane speeds with no penalty; reduce Drive difficulties by 2." },
   { name: "Berserker",             cost: 2, category: "Mental", notes: "Can enter Berserk rage voluntarily; spend Willpower to stop." },
-  { name: "Code of Honor",         cost: 2, category: "Mental", notes: "Personal code grants +2 Willpower dice when acting against it." },
+  {
+    name: "Code of Honor",
+    cost: 2,
+    category: "Mental",
+    notes: "Personal code grants +2 Willpower dice when acting against it. " +
+      "Set: merit=Code of Honor: my code summary.",
+    needsDetail: true,
+    detailLabel: "code summary",
+  },
   { name: "Eidetic Memory",        cost: 2, category: "Mental", notes: "Perfect recall of anything seen or heard." },
   { name: "Inner Strength",        cost: 2, category: "Mental", notes: "+1 die on Willpower rolls to resist supernatural mental attacks." },
   { name: "Natural Linguist",      cost: 2, category: "Mental", notes: "+2 dice on all language-based rolls; learn new languages twice as fast." },
@@ -51,24 +68,56 @@ export const WTA_MERITS: IMeritDef[] = [
 
   // -- Social ----------------------------------------------------------------
   { name: "Family Support",        cost: 1, category: "Social", notes: "Close mortal or kinfolk family gives emotional anchor; +1 Willpower die in crises." },
-  { name: "Reputation",            cost: 1, category: "Social", notes: "Known among a specific community; -1 difficulty on Social rolls there." },
+  {
+    name: "Reputation",
+    cost: 1,
+    category: "Social",
+    notes: "Known among a specific community; -1 difficulty on Social " +
+      "rolls there. Set: merit=Reputation: dockworkers.",
+    needsDetail: true,
+    detailLabel: "community",
+  },
   { name: "Gall",                  cost: 2, category: "Social", notes: "Can approach and request aid from higher-ranked Garou without suffering Renown loss." },
   { name: "Good Old Boy/Girl",     cost: 2, category: "Social", notes: "+1 die on Social rolls within a specific human subculture you belong to." },
   { name: "Natural Leader",        cost: 2, category: "Social", notes: "+1 die on Leadership; followers receive +1 Willpower under your direction." },
   { name: "Mole",                  cost: 2, category: "Social", notes: "Restricted: Glass Walker / Bone Gnawer. Embedded contact in a corp or street faction; one favor per story." },
   { name: "Recognize Garou",       cost: 3, category: "Social", notes: "-2 difficulty on Perception rolls to sense shapeshifters in human form." },
   { name: "Pure Breed",            cost: 3, category: "Social", notes: "Restricted: Silver Fang and most tribes. Visible tribal lineage; +1 die Social w/ Garou, additional dots only confirmed at birth." },
-  { name: "True Love",             cost: 4, category: "Social", notes: "A genuine love anchor; spend Willpower as if 1 higher when acting to protect them." },
+  {
+    name: "True Love",
+    cost: 4,
+    category: "Social",
+    notes: "A genuine love anchor; spend Willpower as if 1 higher when " +
+      "acting to protect them. Set: merit=True Love: Name.",
+    needsDetail: true,
+    detailLabel: "who",
+  },
 
   // -- Supernatural ----------------------------------------------------------
   { name: "Mixed-Morph (Greater)", cost: 5, category: "Supernatural", notes: "As 1-pt version but may freely combine features of any forms." },
-  { name: "Spirit Mentor",         cost: 3, category: "Supernatural", notes: "Lesser spirit acts as advisor; offers occasional aid and counsel." },
+  {
+    name: "Spirit Mentor",
+    cost: 3,
+    category: "Supernatural",
+    notes: "Lesser spirit acts as advisor; offers occasional aid and " +
+      "counsel. Set: merit=Spirit Mentor: owl-spirit.",
+    needsDetail: true,
+    detailLabel: "spirit",
+  },
   { name: "Medium",                cost: 2, category: "Supernatural", notes: "Sense and communicate with ghosts; -1 difficulty when contacting the dead." },
   { name: "Spirit Magnet",         cost: 2, category: "Supernatural", notes: "Spirits notice you; -1 difficulty to spot or summon spirits nearby." },
   { name: "Lifesaver",             cost: 3, category: "Supernatural", notes: "Restricted: Children of Gaia. Lower Rage cap by 1 in exchange for +2 dice on Empathy/Medicine." },
   { name: "True Faith",            cost: 7, category: "Supernatural", notes: "Genuine spiritual conviction; 1 Faith die that adds to relevant rolls and wards evil." },
   { name: "Berserker's Recovery",  cost: 3, category: "Supernatural", notes: "Restricted: Get of Fenris. Heal one bashing per turn while in frenzy." },
-  { name: "Camp Membership",       cost: 1, category: "Supernatural", notes: "Restricted: tribe-specific. Recognized member of a tribal Camp; access to Camp-only Gifts." },
+  {
+    name: "Camp Membership",
+    cost: 1,
+    category: "Supernatural",
+    notes: "Restricted: tribe-specific. Recognized member of a tribal " +
+      "Camp; access to Camp-only Gifts. Set: merit=Camp Membership: Camp.",
+    needsDetail: true,
+    detailLabel: "camp name",
+  },
   { name: "Diet (Garbage)",        cost: 1, category: "Supernatural", notes: "Restricted: Bone Gnawer. Can digest spoiled food without Stamina rolls; resist mundane disease." },
   { name: "Familiarity with the Wyrm", cost: 2, category: "Supernatural", notes: "Restricted: Glass Walker (Wyrmbreaker camp). Recognize Wyrm-taint at -1 difficulty." },
   { name: "Spirit-Touched",        cost: 3, category: "Supernatural", notes: "Spirits treat you with respect; -1 difficulty on Social rolls with Gaian spirits." },

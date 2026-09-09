@@ -21,24 +21,10 @@ addCmd({
   category: "Combat",
   help: `+defend/<kind>  -- Declare a reactive defense for the next attack.
 
-SYNTAX
-  +defend/dodge                 Roll Dex + Dodge vs attacks.
-  +defend/block                 Roll Dex + Brawl vs Brawl/Melee attacks.
-  +defend/parry                 Roll Dex + Melee vs Brawl/Melee attacks.
-                                Requires a wielded melee weapon.
-  +defend/clear                 Cancel a declared defense.
-  +defend                       Show your current declared defense.
+  Full help: +help defend
 
-NOTES
-  Declared defenses roll at FULL pool and consume your next action when
-  the attack lands ("abort to defense"). If you don't declare, the
-  engine auto-rolls your best legal defense at HALF pool whenever you
-  are attacked -- passive evasion that costs no action.
-
-  Illegal defenses for an incoming attack (e.g. /block vs firearms)
-  downgrade silently to auto-fallback dodge.
-
-SEE ALSO: +help attack, +help init, +help wod20th`,
+Examples:
+  +help defend`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

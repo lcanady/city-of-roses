@@ -153,32 +153,17 @@ addCmd({
   pattern: /^\+moot(?:\/(\S+))?\s*(.*)/i,
   lock: "connected",
   category: "Werewolf",
-  help: `+moot[/switch] [<args>]  -- Sept moots: schedule, run, attend.
+  help: `+moot[/switch] [<args>]  — Sept moots: schedule, run, attend.
 
-A moot is the canonical Garou gathering. Phases: Opening Howl, Inner Sky,
-Cracking the Bone, Revel. Closing the moot awards every attendee +0.5
-temp Honor (canon: showing up matters).
+  Phases, attend, award; staff/MotH open and close.
 
-SYNTAX
-  +moot                              List currently open moots.
-  +moot/list                         Same as no switch.
-  +moot/info                         Local moot status (in caern room).
-  +moot/schedule <sept>=<when>       (Staff or Master of the Howl)
-  +moot/open                         (Staff or MotH, in caern room)
-  +moot/attend                       Mark yourself as attending.
-  +moot/phase <next|<phase>|close>   (Staff or MotH) Advance phase.
-  +moot/award <target>=<track>:<N> <reason>  (Staff, during Bone/Revel)
-  +moot/close                        (Staff or MotH) End the moot.
+  Full help: +help moot
+  Phases:    +help moot-phases
 
-EXAMPLES
-  +moot/schedule Sept of the Pines=Saturday at moonrise
-  +moot/open
+Examples:
   +moot/attend
   +moot/phase next
-  +moot/award Cassidy=honor:2 spoke truth
-  +moot/close
-
-SEE ALSO: +help moot-phases, +help sept, +help caern`,
+  +moot/close`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

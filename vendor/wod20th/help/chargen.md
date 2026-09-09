@@ -1,19 +1,22 @@
-CHARGEN -- Character Generation
+---
+aliases: [chargen, +chargen]
+---
++CHARGEN
 
-  See also: +help wod20th (overview)
+Step-by-step character generation for WoD20th.
+
+HOW TO FINISH
+  1. Make all six steps green on +chargen.
+  2. Step 6: +chargen/spend … or +chargen/done
+     (/done only closes freebies -- keeps leftover).
+  3. +sheet to review, then +chargen/submit
+     (sends to staff queue -- not a +job).
 
 SYNTAX
-  +chargen                  View chargen dashboard.
-  +chargen/start            Begin character generation.
-  +chargen/template <splat> Choose a splat (Werewolf, Mortal, etc).
-  +chargen/set <trait>=<n>  Set a stat during chargen.
-  +chargen/spend <trait>    Spend a freebie point on a trait.
-  +chargen/submit           Submit character for staff review.
-  +chargen/reset confirm    Wipe and restart chargen (irreversible).
+  +chargen                Progress dashboard.
+  +chargen/set t=val      Set a trait.
+  +chargen/spend t=n      Freebie spend (Step 6).
+  +chargen/done           Close freebies (not submit).
+  +chargen/submit         Send sheet to staff.
 
-EXAMPLES
-  +chargen/start                  Begin a new character.
-  +chargen/template Werewolf      Choose the Werewolf splat.
-  +chargen/set Strength=3         Set Strength to 3.
-
-SEE ALSO: +help rolling, +help xp
+SEE ALSO: +help chargen/syntax, +help chargen/steps

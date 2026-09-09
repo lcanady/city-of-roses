@@ -30,25 +30,10 @@ addCmd({
   category: "Vampire",
   help: `+discipline[/switch] [<arg>]  -- Kindred Disciplines & powers.
 
-SYNTAX
-  +discipline                 List discs + combat flags.
-  +discipline/powers          Actives you can use now.
-  +discipline/info <name>     Disc or power blurb.
-  +discipline/primary [path]  View/set blood-magic primary path.
-  +discipline/use <power>     Invoke (see target syntax).
-  +discipline/use <p> <tgt>   Opposed powers need a target.
-  +discipline/use Celerity [n]  Bank n extra actions.
+  Full help: +help discipline
 
-COMBAT
-  Potence / Fortitude passive; Celerity extra actions;
-  Feral Claws: Brawl -> aggravated +1.
-
-EXAMPLES
-  +discipline/use Command Alice
-  +discipline/use feral-claws
-  +discipline/use Celerity 2
-
-SEE ALSO: +help blood, +help beast, +help attack`,
+Examples:
+  +help discipline`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw = (u.cmd.args[0] ?? "").toLowerCase().trim();

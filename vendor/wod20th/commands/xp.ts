@@ -17,23 +17,10 @@ addCmd({
   category: "Character",
   help: `+xp[/<switch>] [<args>]  -- XP management (approved characters only).
 
-Switches:
-  (none)                    Show XP balance and recent log
-  /spend <trait>            Spend XP to raise a trait by 1 dot
-  /gift <name>              Spend XP to learn a new gift
-  /rite <slug>              Spend XP to learn a new rite
-  /cost <trait>             Preview XP cost to raise a trait (no spend)
-  /preview <trait>          Alias for /cost
-  /log                      Full XP history
-  /award <target>=<n> <reason>   (Staff) Award XP to a player
-  /set <target>=<n> <reason>     (Staff) Set total XP (correction)
+  Full help: +help xp
 
 Examples:
-  +xp                       Show your current balance
-  +xp/spend Strength        Spend XP to raise Strength by 1
-  +xp/cost Melee            See how much Melee would cost
-  +xp/log                   Full XP history
-  +xp/award Siobhan=3 Monthly award`,
+  +help xp`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

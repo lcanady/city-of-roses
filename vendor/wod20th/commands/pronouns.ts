@@ -17,25 +17,10 @@ addCmd({
   category: "General",
   help: `+pronouns[/switch] [<args>]  -- Set your character's pronouns.
 
-SYNTAX
-  +pronouns                  Show your current pronouns.
-  +pronouns/set <preset>     Use a preset: he, she, they (default), it.
-  +pronouns/set <s>/<o>/<p>/<a>   Custom set; e.g. xe/xem/xir/xirs.
-  +pronouns/clear            Revert to the default (they/them/their/theirs).
+  Full help: +help pronouns
 
-EXAMPLES
-  +pronouns/set she
-  +pronouns/set xe/xem/xir/xirs
-  +pronouns/clear
-
-SUBSTITUTION TOKENS (any pose or message)
-  %s / %S    subject       (he | she | they | it)
-  %o / %O    object        (him | her | them | it)
-  %p / %P    possessive    (his | her | their | its)   -- "%p talons"
-  %a / %A    absolute      (his | hers | theirs | its) -- "the talons are %a"
-  Use %%s to print a literal %s.
-
-SEE ALSO: +help sheet, +help deedname`,
+Examples:
+  +help pronouns`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

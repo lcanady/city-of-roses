@@ -115,8 +115,18 @@ export interface IWoDChar {
 
   // Step 5 -- Advantages
   backgrounds: Record<string, number>;
+  /**
+   * Merits keyed by display name. Qualified merits use
+   * "Language (Spanish)" so the same base merit can stack.
+   * Value = freebie cost paid.
+   */
   merits?: Record<string, number>;
   flaws?: Record<string, number>;
+  /**
+   * Free-text focus for backgrounds that need a qualifier
+   * (Contacts field, Ally identity, etc.). Key = background name.
+   */
+  backgroundDetails?: Record<string, string>;
   gifts?: string[];  // wta/kinfolk -- exactly 3 for wta
   renown?: { glory: number; honor: number; wisdom: number }; // wta only -- permanent
   renownTemp?: { glory: number; honor: number; wisdom: number }; // wta only -- temporary
@@ -304,6 +314,11 @@ export interface IWoDChar {
 
   freebiesRemaining: number;
   freebiesLog: IFreebieEntry[];
+  /**
+   * Step 6 acknowledgement. False/undefined while freebies remain unspent
+   * and the player has not run +chargen/done. Auto-true when bank hits 0.
+   */
+  freebiesDone?: boolean;
 
   // XP
   xpTotal: number;    // total XP awarded
@@ -334,7 +349,8 @@ export type TraitCategory =
   | "specialty"     // e.g. Strength.specialty -- string stored in *Specialties record
   | "composite"     // e.g. attrs.priority -- multi-part value
   | "merit"         // +chargen/set merit=<name> -- costs freebies
-  | "flaw";         // +chargen/set flaw=<name> -- gives freebies (<=7 cap)
+  | "flaw"          // +chargen/set flaw=<name> -- gives freebies (<=7 cap)
+  | "gift-auto";    // +chargen/set gift=<Name> -- auto-picks breed/auspice/tribe slot
 
 export interface ITraitResolution {
   found: boolean;
@@ -460,6 +476,15 @@ export interface IMeritDef {
   cost: number;     // freebie cost (1-7)
   category: "Physical" | "Mental" | "Social" | "Supernatural" | "WtA";
   notes?: string;
+  /**
+   * Player must supply a free-text qualifier (language, camp, etc.).
+   * Stored as "Name (detail)" so Language can stack per language.
+   */
+  needsDetail?: boolean;
+  /** Prompt fragment, e.g. "language" → merit=Language: Spanish */
+  detailLabel?: string;
+  /** Allow multiple takes with different details (Language). Default false. */
+  stackable?: boolean;
 }
 
 export interface IFlawDef {
@@ -467,6 +492,8 @@ export interface IFlawDef {
   bonus: number;    // freebie points given back (1-5)
   category: "Physical" | "Mental" | "Social" | "Supernatural" | "WtA";
   notes?: string;
+  needsDetail?: boolean;
+  detailLabel?: string;
 }
 
 export interface ISplat {

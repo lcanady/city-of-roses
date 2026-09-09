@@ -1,33 +1,79 @@
-// core/format.ts -- wod20th display chrome.
+// core/format.ts -- wod20th display chrome (78-col hard cap).
 //
-// Synchronous 78-column layout helpers. The @ursamu/globals renderer is
-// async (it evaluates softcode theme templates), which does not fit the
-// plugin's sync report call sites -- so wod20th renders the same chrome
-// locally with the default theme's separators.
+// Synchronous layout helpers. The @ursamu/globals renderer is async
+// (softcode themes), which does not fit sync report call sites -- so
+// wod20th renders chrome locally. All helpers respect visual width
+// after stripping MUSH color codes.
 
-const WIDTH = 78;
+export const WIDTH = 78;
 const MAJ = "=";
 const MIN = "-";
 
-function center(text: string, pad: string, width: number): string {
-  if (text.length >= width) return text.slice(0, width);
-  const total = width - text.length;
+/** Visible length after stripping MUSH %c / %r-style codes. */
+export function vlen(s: string): number {
+  return String(s ?? "")
+    .replace(/%c[a-zA-Z]/g, "")
+    .replace(/%[rntbR]/g, "")
+    .length;
+}
+
+/**
+ * Clip to max visible columns. Appends "..." when truncated.
+ * Color codes are preserved and do not count toward width.
+ */
+export function clipVis(s: string, max: number): string {
+  const raw = String(s ?? "");
+  if (max <= 0) return "";
+  if (vlen(raw) <= max) return raw;
+
+  const limit = Math.max(0, max - 3);
+  let visual = 0;
+  let out = "";
+  let i = 0;
+  while (i < raw.length && visual < limit) {
+    if (raw[i] === "%" && i + 1 < raw.length) {
+      const n = raw[i + 1]!;
+      if (/[a-zA-Z]/.test(n) || /[rntbR]/.test(n)) {
+        out += raw.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+    }
+    out += raw[i];
+    visual++;
+    i++;
+  }
+  return `${out}...`;
+}
+
+/** Pad (or clip) to exactly `width` visible columns. */
+export function padVis(s: string, width: number): string {
+  const clipped = clipVis(s, width);
+  const pad = Math.max(0, width - vlen(clipped));
+  return clipped + " ".repeat(pad);
+}
+
+function centerVis(text: string, pad: string, width: number): string {
+  const t = clipVis(text, width);
+  const len = vlen(t);
+  if (len >= width) return t;
+  const total = width - len;
   const left = Math.floor(total / 2);
   const right = total - left;
-  return pad.repeat(left) + text + pad.repeat(right);
+  return pad.repeat(left) + t + pad.repeat(right);
 }
 
 /** Full-width header bar with a centered title. */
 export function header(title: string): string {
   const t = title.trim();
   if (!t) return MAJ.repeat(WIDTH);
-  return center(` ${t} `, MAJ, WIDTH);
+  return centerVis(` ${t} `, MAJ, WIDTH);
 }
 
 /** Full-width section divider with an optional centered label. */
 export function divider(label: string | null): string {
   if (!label) return MIN.repeat(WIDTH);
-  return center(` ${label.trim()} `, MIN, WIDTH);
+  return centerVis(` ${label.trim()} `, MIN, WIDTH);
 }
 
 /** Full-width footer bar. */

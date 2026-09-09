@@ -16,25 +16,10 @@ addCmd({
   category: "Combat",
   help: `+split <N>  -- Declare N actions this turn; each takes -(N-1) dice.
 
-SYNTAX
-  +split <N>             Declare N actions (1-5). Each action pays -(N-1).
-  +split/clear           Cancel a declaration.
-  +split                 Show your current declaration.
+  Full help: +help split
 
-EXAMPLES
-  +split 2               Take two actions this turn; each rolls at -1.
-  +split 3               Three actions, each at -2.
-  +split/clear           Drop it and return to a single full-pool action.
-
-NOTES
-  +attack consumes one slot. A declared +defend consumed by an incoming
-  attack also consumes one slot. When all slots are used the declaration
-  clears. Auto-half passive defenses are FREE and do not consume slots.
-
-  A declared +defend with no +split (count=1) is an "abort to defense":
-  full-pool defense, no other action this turn.
-
-SEE ALSO: +help attack, +help defend, +help init`,
+Examples:
+  +help split`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

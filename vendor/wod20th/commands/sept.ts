@@ -284,37 +284,16 @@ addCmd({
   pattern: /^\+sept(?:\/(\S+))?\s*(.*)/i,
   lock: "connected",
   category: "Werewolf",
-  help: `+sept[/switch] [<args>]  -- Sept membership, leadership, roster.
+  help: `+sept[/switch] [<args>]  — Sept membership and roster.
 
-A sept is the society around a caern. Mechanical bonuses come from the
-caern (Gnosis regen, ritual dice in the bound room); the sept layer
-tracks Sept Alpha, packs, and named positions.
+  List, join, roster, positions; staff create/bind/alpha.
 
-SYNTAX
-  +sept                                Show your sept (auto-resolved).
-  +sept/list                           List all septs.
-  +sept/info <name>                    Show a sept.
-  +sept/roster [<name>][=<opts>]       Full roster (see ROSTER OPTS).
-  +sept/create <name>                  (Staff) Found a new sept.
-  +sept/bind <sept>/<caern>            (Staff) Bind a caern to a sept.
-  +sept/join <sept>                    (Pack Alpha) Bring your pack in.
-  +sept/leave                          (Pack Alpha) Pull your pack out.
-  +sept/alpha <sept>=<player>          (Staff) Set the Sept Alpha.
-  +sept/position <sept>/<plr>=<pos>    (Sept Alpha/Staff) Assign a position.
-  +sept/unposition <sept>/<player>     (Sept Alpha/Staff) Clear a position.
-  +sept/disband <name>                 (Staff) Destroy an empty sept.
+  Full help: +help sept
 
-ROSTER OPTS  (comma-separated key:value on the RHS of =)
-  sort:name|rank|auspice|breed|pack|position
-  auspice:<value>  breed:<value>  tribe:<value>
-  pack:<value>     position:<value>  (substring match)
-
-EXAMPLES
-  +sept/roster Sept of the Pines
-  +sept/roster Sept of the Pines=sort:rank
-  +sept/roster Sept of the Pines=auspice:galliard,sort:name
-
-SEE ALSO: +help caern, +help pack, +help wod20th`,
+Examples:
+  +sept
+  +sept/roster My Sept=sort:rank
+  +sept/join Sept of the Pines`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

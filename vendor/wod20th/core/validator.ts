@@ -10,6 +10,7 @@ import {
   ATTR_CATEGORY_NAMES,
   ABIL_CATEGORY_NAMES,
   SPECIALTY_OVERRIDE_LIST,
+  ATTR_BASE,
 } from "./attributes.ts";
 import type { AttributeGroup, AbilityGroup } from "./attributes.ts";
 
@@ -93,10 +94,13 @@ function validateStep2(char: IWoDChar): IStepBudget {
 }
 
 // -- Step 3 -- Attributes ----------------------------------------------------
+// Once the player has moved past Step 3, freebie spends may raise attrs
+// above the 7/5/3 pool. Keep only hard caps so earlier steps stay green.
 
 function validateStep3(char: IWoDChar): IStepBudget {
   const issues: string[] = [];
   const remaining: Record<string, number> = {};
+  const pastStep = char.chargenStep > 3;
 
   // Priority must be set
   const [pri, sec, ter] = char.attributePriority;
@@ -122,21 +126,36 @@ function validateStep3(char: IWoDChar): IStepBudget {
     const attrs = ATTRIBUTE_GROUPS[group as AttributeGroup];
     const spent = attrs.reduce((sum, a) => sum + (char.attributes[a] ?? 0), 0);
     const rem = budget - spent;
-    remaining[`${group}Dots`] = rem;
-    if (rem < 0) issues.push(`${group} has ${-rem} too many extra dots`);
-    if (rem > 0) issues.push(`${group} needs ${rem} more extra dot${rem === 1 ? "" : "s"}`);
+    remaining[`${group}Dots`] = pastStep ? Math.min(0, rem) : rem;
+    // Exact pool only while still ON step 3. Freebies later may overshoot.
+    if (!pastStep) {
+      if (rem < 0) {
+        issues.push(`${group} has ${-rem} too many extra dots`);
+      }
+      if (rem > 0) {
+        issues.push(
+          `${group} needs ${rem} more extra dot${rem === 1 ? "" : "s"}`,
+        );
+      }
+    }
   }
 
-  // Cap check: no attribute > 5 total (base 1 + extra)
+  // Cap check: no attribute > 5 total (ATTR_BASE + extra)
   for (const [attr, extra] of Object.entries(char.attributes)) {
-    if ((extra + 1) > 5) issues.push(`${attr} exceeds max of 5`);
+    if ((ATTR_BASE + extra) > 5) {
+      issues.push(`${attr} exceeds max of 5`);
+    }
   }
 
   // Specialty: only on attrs at final value >= 4
   for (const [attr, spec] of Object.entries(char.attributeSpecialties)) {
     if (spec) {
-      const total = 1 + (char.attributes[attr] ?? 0);
-      if (total < 4) issues.push(`${attr} specialty requires value >= 4 (currently ${total})`);
+      const total = ATTR_BASE + (char.attributes[attr] ?? 0);
+      if (total < 4) {
+        issues.push(
+          `${attr} specialty requires value >= 4 (currently ${total})`,
+        );
+      }
     }
   }
 
@@ -144,10 +163,12 @@ function validateStep3(char: IWoDChar): IStepBudget {
 }
 
 // -- Step 4 -- Abilities -----------------------------------------------------
+// Past Step 4, freebies may push abilities above 3 and over the 13/9/5 pool.
 
 function validateStep4(char: IWoDChar): IStepBudget {
   const issues: string[] = [];
   const remaining: Record<string, number> = {};
+  const pastStep = char.chargenStep > 4;
 
   const [pri, sec, ter] = char.abilityPriority;
   const validPriority = pri && sec && ter &&
@@ -157,7 +178,10 @@ function validateStep4(char: IWoDChar): IStepBudget {
     ABIL_CATEGORY_NAMES.includes(ter as AbilityGroup);
 
   if (!validPriority) {
-    issues.push("Set ability priority first: +chargen/priority abilities=talents/skills/knowledges");
+    issues.push(
+      "Set ability priority first: " +
+        "+chargen/priority abilities=talents/skills/knowledges",
+    );
     return { step: 4, complete: false, issues, remaining };
   }
 
@@ -172,14 +196,25 @@ function validateStep4(char: IWoDChar): IStepBudget {
     const abils = ABILITY_GROUPS[group as AbilityGroup];
     const spent = abils.reduce((sum, a) => sum + (char.abilities[a] ?? 0), 0);
     const rem = budget - spent;
-    remaining[`${group}Dots`] = rem;
-    if (rem < 0) issues.push(`${group} has ${-rem} too many dots`);
-    if (rem > 0) issues.push(`${group} needs ${rem} more dot${rem === 1 ? "" : "s"}`);
+    remaining[`${group}Dots`] = pastStep ? Math.min(0, rem) : rem;
+    if (!pastStep) {
+      if (rem < 0) issues.push(`${group} has ${-rem} too many dots`);
+      if (rem > 0) {
+        issues.push(
+          `${group} needs ${rem} more dot${rem === 1 ? "" : "s"}`,
+        );
+      }
+    }
   }
 
-  // Step cap: abilities max 3 at chargen (freebies can push past this in Step 5)
+  // Soft max 3 only while ON step 4; freebies may raise later.
   for (const [abil, dots] of Object.entries(char.abilities)) {
-    if (dots > 3) issues.push(`${abil} exceeds max of 3 during Step 4 (use freebies in Step 6 to go higher)`);
+    if (!pastStep && dots > 3) {
+      issues.push(
+        `${abil} exceeds max of 3 during Step 4 ` +
+          `(use freebies in Step 6 to go higher)`,
+      );
+    }
     if (dots > 5) issues.push(`${abil} exceeds absolute max of 5`);
   }
 
@@ -187,9 +222,12 @@ function validateStep4(char: IWoDChar): IStepBudget {
   for (const [abil, spec] of Object.entries(char.abilitySpecialties)) {
     if (spec) {
       const dots = char.abilities[abil] ?? 0;
-      const isOverride = (SPECIALTY_OVERRIDE_LIST as readonly string[]).includes(abil);
+      const isOverride = (SPECIALTY_OVERRIDE_LIST as readonly string[])
+        .includes(abil);
       if (dots < 4 && !isOverride) {
-        issues.push(`${abil} specialty requires value >= 4 (currently ${dots})`);
+        issues.push(
+          `${abil} specialty requires value >= 4 (currently ${dots})`,
+        );
       }
     }
   }
@@ -198,19 +236,32 @@ function validateStep4(char: IWoDChar): IStepBudget {
 }
 
 // -- Step 5 -- Advantages ----------------------------------------------------
+// Past Step 5, freebies may buy more background dots (over the step pool).
 
 function validateStep5(char: IWoDChar): IStepBudget {
   const issues: string[] = [];
   const remaining: Record<string, number> = {};
   const splat = SplatRegistry.get(char.splat);
   const ext = splat?.ext as IWtaSplatExt | undefined;
+  const pastStep = char.chargenStep > 5;
 
   // Backgrounds
   const bgTotal = Object.values(char.backgrounds).reduce((s, v) => s + v, 0);
   const bgBudget = splat?.backgroundDots ?? 5;
-  remaining.backgroundDots = bgBudget - bgTotal;
-  if (bgTotal > bgBudget) issues.push(`Background total ${bgTotal} exceeds limit of ${bgBudget}`);
-  if (bgTotal < bgBudget) issues.push(`Assign ${bgBudget - bgTotal} more background dot${bgBudget - bgTotal === 1 ? "" : "s"}`);
+  remaining.backgroundDots = pastStep
+    ? Math.min(0, bgBudget - bgTotal)
+    : bgBudget - bgTotal;
+  if (!pastStep && bgTotal > bgBudget) {
+    issues.push(
+      `Background total ${bgTotal} exceeds limit of ${bgBudget}`,
+    );
+  }
+  if (bgTotal < bgBudget) {
+    issues.push(
+      `Assign ${bgBudget - bgTotal} more background dot` +
+        `${bgBudget - bgTotal === 1 ? "" : "s"}`,
+    );
+  }
 
   // Tribe restrictions
   if (ext && char.tribe) {
@@ -294,20 +345,31 @@ function validateStep5(char: IWoDChar): IStepBudget {
   return { step: 5, complete: issues.length === 0, issues, remaining };
 }
 
-// -- Step 6 -- Finishing Touches ---------------------------------------------
+// -- Step 6 -- Freebies ------------------------------------------------------
+// Incomplete until the freebie bank is empty OR the player confirms with
+// +chargen/done. Leftover freebies are allowed after explicit confirm.
 
 function validateStep6(char: IWoDChar): IStepBudget {
   const issues: string[] = [];
   const remaining: Record<string, number> = {};
 
-  if (char.freebiesRemaining < 0) {
-    issues.push(`Overspent ${-char.freebiesRemaining} freebie points`);
+  const fb = char.freebiesRemaining ?? 0;
+  remaining.freebies = fb;
+
+  if (fb < 0) {
+    issues.push(`Overspent ${-fb} freebie points`);
+  } else if (fb > 0 && !char.freebiesDone) {
+    issues.push(
+      `${fb} freebie point${fb === 1 ? "" : "s"} left -- ` +
+        `+chargen/spend <trait>=n, or +chargen/done to finish`,
+    );
   }
-  remaining.freebies = char.freebiesRemaining;
 
   // Cap checks after freebies
   for (const [attr, extra] of Object.entries(char.attributes)) {
-    if ((extra + 1) > 5) issues.push(`${attr} exceeds max of 5`);
+    if ((ATTR_BASE + extra) > 5) {
+      issues.push(`${attr} exceeds max of 5`);
+    }
   }
   for (const [abil, dots] of Object.entries(char.abilities)) {
     if (dots > 5) issues.push(`${abil} exceeds max of 5`);
@@ -320,12 +382,19 @@ function validateStep6(char: IWoDChar): IStepBudget {
     const tribeDef = ext.tribes?.find((t) => t.id === char.tribe);
     for (const req of tribeDef?.backgroundRestrictions?.required ?? []) {
       if ((char.backgrounds[req.name] ?? 0) < req.minDots) {
-        issues.push(`${tribeDef!.displayName} requires ${req.name} >= ${req.minDots}`);
+        issues.push(
+          `${tribeDef!.displayName} requires ${req.name} >= ${req.minDots}`,
+        );
       }
     }
   }
 
-  return { step: 6, complete: issues.length === 0, issues, remaining };
+  return {
+    step: 6,
+    complete: issues.length === 0,
+    issues,
+    remaining,
+  };
 }
 
 // -- Freebie cost calculator ------------------------------------------------

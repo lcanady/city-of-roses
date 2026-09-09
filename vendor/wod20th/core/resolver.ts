@@ -143,12 +143,13 @@ export function resolveTrait(char: IWoDChar, raw: string): ITraitResolution {
   }
 
   // -- Step 3: attribute names ------------------------------------------------
+  // Player sets FINAL rating (1-5). applySet stores extra = n - ATTR_BASE.
   const attr = canonicalAttr(raw);
   if (attr) {
     return {
       found: true, step: 3, category: "number",
       field: `attributes.${attr}`,
-      min: 0, max: 4,           // extra dots 0-4; base 1 => total 1-5
+      min: 1, max: 5,
     };
   }
 
@@ -170,25 +171,43 @@ export function resolveTrait(char: IWoDChar, raw: string): ITraitResolution {
     return { found: true, step: 5, category: "number", field: `renown.${key}`, min: 0, max: 10 };
   }
 
-  // -- Step 5: gift slots -----------------------------------------------------
-  if (GIFT_KEYS.has(lower)) {
-    const slot = lower.split(".")[1]; // "breed" | "auspice" | "tribe"
-    return { found: true, step: 5, category: "string-enum", field: `gifts.${slot}`, enumValues: [] };
-    // Note: enumValues populated at validation time since they depend on char.breed/auspice/tribe
+  // -- Step 5: gift pick (preferred: +chargen/set gift=<Name>) --------------
+  if (lower === "gift" || lower === "gifts") {
+    return {
+      found: true,
+      step: 5,
+      category: "gift-auto",
+      field: "gift",
+    };
   }
 
-  // -- Step 5: gift by name (auto-slot detection) ----------------------------
-  // Must come before the background fallback so "Razor Claws" isn't treated as a bg.
+  // -- Step 5: gift slots (optional explicit gifts.breed=...) ---------------
+  if (GIFT_KEYS.has(lower)) {
+    const slot = lower.split(".")[1]; // "breed" | "auspice" | "tribe"
+    return {
+      found: true,
+      step: 5,
+      category: "string-enum",
+      field: `gifts.${slot}`,
+      enumValues: [],
+    };
+  }
+
+  // -- Step 5: gift by bare name (+chargen/set Persuasion=1) ----------------
+  // Before background fallback so gift titles are not treated as bgs.
+  // applyGiftAuto handles pool membership / slot pick / error text.
   const giftExt = splat?.ext as IWtaSplatExt | undefined;
   if (giftExt?.gifts) {
-    const giftDef = giftExt.gifts[lower];
+    const giftDef = findGiftDef(giftExt, lower);
     if (giftDef) {
       const slot = detectGiftSlot(char, giftExt, giftDef.name);
-      if (slot) {
-        return { found: true, step: 5, category: "string-enum", field: `gifts.${slot}`, enumValues: [] };
-      }
-      // Gift exists but not in this character's breed/auspice/tribe pools
-      return notFound(raw);
+      return {
+        found: true,
+        step: 5,
+        category: "gift-auto",
+        field: slot ? `gifts.${slot}` : "gift",
+        parentTrait: giftDef.name,
+      };
     }
   }
 
@@ -303,24 +322,68 @@ function notFound(_raw: string): ITraitResolution {
   return { found: false, step: 1, category: "string-free", field: "" };
 }
 
+/** Known background display names (lower) -- never steal via gift prefix. */
+const BACKGROUND_NAMES = new Set(
+  [
+    "allies", "ancestors", "contacts", "fetish", "kinfolk", "mentor",
+    "past life", "pure breed", "resources", "rites", "spirit heritage",
+    "totem",
+  ],
+);
+
+/** Look up a gift def by exact key or unique name prefix / case-fold. */
+function findGiftDef(
+  ext: IWtaSplatExt,
+  lower: string,
+): { name: string } | undefined {
+  if (!ext.gifts) return undefined;
+  const direct = ext.gifts[lower];
+  if (direct) return direct;
+  const exact = Object.values(ext.gifts).find(
+    (g) => g.name.toLowerCase() === lower,
+  );
+  if (exact) return exact;
+  // Prefix match must not eat backgrounds (Totem → "Totem Gift").
+  if (BACKGROUND_NAMES.has(lower)) return undefined;
+  const hits = Object.values(ext.gifts).filter((g) =>
+    g.name.toLowerCase().startsWith(lower + " ") ||
+    g.name.toLowerCase().startsWith(lower)
+  );
+  // Prefer starts-with whole word: "totem " not bare if ambiguous
+  const wordHits = hits.filter((g) => {
+    const n = g.name.toLowerCase();
+    return n === lower || n.startsWith(lower + " ") ||
+      n.startsWith(lower + "'");
+  });
+  const pool = wordHits.length > 0 ? wordHits : hits;
+  if (pool.length === 1) return pool[0];
+  return undefined;
+}
+
 /**
  * Given a gift name, determine which slot (breed/auspice/tribe) it belongs to
  * for this character. Prefers unfilled slots; falls back to first matching pool.
  * Returns null if the gift is not in any of the character's beginning-gift pools.
  */
-function detectGiftSlot(
+export function detectGiftSlot(
   char: IWoDChar,
   ext: IWtaSplatExt,
   giftName: string,
 ): "breed" | "auspice" | "tribe" | null {
   const lower = giftName.toLowerCase();
-  const breedDef   = ext.breeds?.find((b) => b.id === char.breed);
+  const breedDef = ext.breeds?.find((b) => b.id === char.breed);
   const auspiceDef = ext.auspices?.find((a) => a.id === char.auspice);
-  const tribeDef   = ext.tribes?.find((t) => t.id === char.tribe);
+  const tribeDef = ext.tribes?.find((t) => t.id === char.tribe);
 
-  const inBreed   = breedDef?.beginningGifts.some((g) => g.toLowerCase() === lower)   ?? false;
-  const inAuspice = auspiceDef?.beginningGifts.some((g) => g.toLowerCase() === lower) ?? false;
-  const inTribe   = tribeDef?.beginningGifts.some((g) => g.toLowerCase() === lower)   ?? false;
+  const inBreed = breedDef?.beginningGifts.some((g) =>
+    g.toLowerCase() === lower
+  ) ?? false;
+  const inAuspice = auspiceDef?.beginningGifts.some((g) =>
+    g.toLowerCase() === lower
+  ) ?? false;
+  const inTribe = tribeDef?.beginningGifts.some((g) =>
+    g.toLowerCase() === lower
+  ) ?? false;
 
   const candidates = (
     [inBreed && "breed", inAuspice && "auspice", inTribe && "tribe"] as const
@@ -330,8 +393,13 @@ function detectGiftSlot(
 
   // Prefer the slot that isn't filled yet
   const gifts = char.gifts ?? ["", "", ""];
-  const slotIdx: Record<string, number> = { breed: 0, auspice: 1, tribe: 2 };
-  return candidates.find((s) => !gifts[slotIdx[s]]) ?? candidates[0];
+  const slotIdx: Record<string, number> = {
+    breed: 0,
+    auspice: 1,
+    tribe: 2,
+  };
+  return candidates.find((s) => !gifts[slotIdx[s]]) ??
+    candidates[0];
 }
 
 /** Normalise a background name to a storage key (Title Case preserved). */

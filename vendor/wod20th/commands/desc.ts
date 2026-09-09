@@ -17,32 +17,15 @@ addCmd({
   pattern: /^@desc(?:\/(\S+))?\s+(.+?)\s*=\s*(.*)$/i,
   lock: "connected",
   category: "Building",
-  help: `@desc[/<plane>] <target>=<value>  -- Set a description.
+  help: `@desc[/<plane>] <target>=<value>  — Set a description.
 
-  Without a switch, writes the default description. With /<plane>, writes
-  a plane-specific description shown when a viewer in that reality looks
-  at the target. Empty value clears the field.
+  Default or plane-specific (e.g. /penumbra). Empty value clears.
 
-SYNTAX
-  @desc <target>=<value>
-  @desc/<plane> <target>=<value>
-  @desc[/<plane>] <target>=         (clear)
+  Full help: +help desc
 
-SWITCHES
-  /<plane>  Lower-case slug of a reality plane (e.g. /penumbra,
-            /deep-umbra, /astral, /shadowlands).
-
-TARGETS
-  me, here, or any name you can edit.
-
-EXAMPLES
-  @desc here=A still pool that mirrors the moon...
-  @desc/penumbra here=The pool is a portal of liquid silver...
-  @desc me=A tall figure in a worn leather jacket.
-  @desc/penumbra me=A wolf-shape woven of moonlight.
-  @desc/penumbra Strongbox=         (clear the penumbra desc)
-
-SEE ALSO: +help look, +help stepside, +help wod20th`,
+Examples:
+  @desc me=A tall figure in a worn jacket.
+  @desc/penumbra here=Silver mist over the pool.`,
 
   exec: async (u: IUrsamuSDK) => {
     const switchArg = (u.cmd.args[0] ?? "").toLowerCase().trim();

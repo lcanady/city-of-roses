@@ -89,23 +89,10 @@ addCmd({
   category: "Werewolf",
   help: `+spirit[/switch] [<arg>]  -- Browse and engage Garou spirits.
 
-SYNTAX
-  +spirit                       List the whole catalog.
-  +spirit/list [<type>]         List spirits, optionally filtered by type.
-  +spirit/info <slug>           Show full sheet (stats, charms, ban).
-  +spirit/totems                Shortcut for +spirit/list totem.
-  +spirit/bargain <slug>=<offer>      (Umbra) Negotiate -- 1 Gnosis.
-  +spirit/chiminage <slug>=<gift>     (Umbra) Formal offering -- 1 Willpower.
-  +spirit/bind <slug>=<item>          Bind a spirit into a fetish (rank>=2).
-  +spirit/banish <slug>               (Umbra) Drive a spirit from the scene.
+  Full help: +help spirit
 
-EXAMPLES
-  +spirit/info wolf
-  +spirit/bargain unicorn=I will plant 100 saplings
-  +spirit/bind sept-totem=spirit-stone
-  +spirit/banish bane-roach
-
-SEE ALSO: +help spirit, +help pack, +help fetish, +help rite`,
+Examples:
+  +help spirit`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

@@ -73,6 +73,9 @@ export async function saveChar(char: IWoDChar): Promise<void> {
     willpower: char.willpower,
     freebiesRemaining: char.freebiesRemaining,
     freebiesLog: char.freebiesLog,
+    ...(char.freebiesDone !== undefined
+      ? { freebiesDone: char.freebiesDone }
+      : {}),
     xpTotal: char.xpTotal,
     xpSpent: char.xpSpent,
     staffNotes: char.staffNotes,
@@ -89,6 +92,9 @@ export async function saveChar(char: IWoDChar): Promise<void> {
     ...(char.deformity !== undefined ? { deformity: char.deformity } : {}),
     ...(char.merits !== undefined ? { merits: char.merits } : {}),
     ...(char.flaws !== undefined ? { flaws: char.flaws } : {}),
+    ...(char.backgroundDetails !== undefined
+      ? { backgroundDetails: char.backgroundDetails }
+      : {}),
     ...(char.gifts !== undefined ? { gifts: char.gifts } : {}),
     ...(char.rites !== undefined ? { rites: char.rites } : {}),
     ...(char.comboGifts !== undefined ? { comboGifts: char.comboGifts } : {}),

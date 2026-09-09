@@ -1,15 +1,41 @@
 // commands/chargen.ts -- +chargen command with all switches.
 import { addCmd } from "@ursamu/ursamu";
-import { divider, footer, header } from "../core/format.ts";
+import {
+  divider,
+  footer,
+  header,
+  WIDTH,
+  vlen,
+  clipVis,
+  padVis,
+} from "../core/format.ts";
 import type { IUrsamuSDK } from "@ursamu/ursamu";
 import { createChar, findByPlayer, saveChar, setStatus, findSubmitted } from "../db/charDb.ts";
-import { applySet, applySpend, applyUnspend, advanceStep, applyNote, deleteNote, setNotePublic, applyPriority } from "../core/chargen.ts";
 import {
-  formatSheet, formatBudget, formatDashboard, formatGiftList, formatQueue,
+  applySet,
+  applySpend,
+  applyUnspend,
+  applyFreebiesDone,
+  advanceStep,
+  applyNote,
+  deleteNote,
+  setNotePublic,
+  applyPriority,
+} from "../core/chargen.ts";
+import {
+  formatSheet,
+  formatBudget,
+  formatDashboard,
+  formatGiftList,
+  formatBackgroundList,
+  formatMeritList,
+  formatFlawList,
+  formatQueue,
+  canAccessStep,
 } from "../core/renderer.ts";
 import { validateStep } from "../core/validator.ts";
 import { SplatRegistry } from "../core/registry.ts";
-import { allTraitNames } from "../core/resolver.ts";
+import { allTraitNames, resolveTrait } from "../core/resolver.ts";
 import {
   emitChargenStarted, emitChargenSubmitted, emitChargenApproved,
   emitChargenDenied, emitChargenReset, emitChargenStep, emitCharCreated,
@@ -57,51 +83,19 @@ addCmd({
   pattern: /^\+chargen(?:\/(\S+))?\s*(.*)/i,
   lock: "connected",
   category: "Character Generation",
-  help: `+chargen[/<switch>] [<args>]  -- WoD20th character generation.
+  help: `+chargen[/<switch>] [<args>]  — Character generation.
 
-Switches:
-  /start                        Begin chargen (shows template picker)
-  /template <splat>             Select a template to start chargen
-  /set <trait>=<value>          Set any chargen trait (universal setter)
-  /priority <kind>=<a>/<b>/<c>  Set attribute or ability priority
-                                kind is "attrs" or "abilities"
-  /set merit=<name>             Add (or remove) a merit -- costs freebies
-  /set flaw=<name>              Add (or remove) a flaw -- gives freebies (<=7 cap)
-  /spend <trait>=<dots>         Spend freebie points on a trait (Step 6)
-  /unspend <trait>              Remove last freebie entry for a trait
-  /freebies                     Show freebie log and remaining points
-  /meritlist [<category>]       Browse available merits
-  /flawlist [<category>]        Browse available flaws
-  /giftlist [<pool>]            List available gifts (breed/auspice/tribe)
-  /traits                       List all valid trait names
-  /notes/set <name>=<text>      Write a personal note on your character
-  /notes/clear <name>           Delete a named note
-  /notes/public <name>          Make a note visible to staff/viewers
-  /notes/list                   List all your notes
-  /submit                       Submit character for staff approval
-  /reset                        Wipe and restart chargen
-  /approve <target>             (Staff) Approve a character
-  /deny <target>=<reason>       (Staff) Deny a character
-  /note <target>=<text>         (Staff) Add a staff note
-  /staffreset <target>          (Staff) Wipe another player's chargen
-  /queue                        (Staff) List submitted characters
+  Dashboard, set traits, freebies, submit to staff.
+  Finish: /done closes freebies; /submit sends sheet
+  (staff queue -- not a +job).
+
+  Full help: +help chargen
+  Steps:     +help chargen/steps
 
 Examples:
-  +chargen                          Show progress dashboard
-  +chargen/start                    Show the template picker
-  +chargen/template mortal          Start chargen as a Mortal
-  +chargen/template vampire         Start chargen as a Vampire (V20)
-  +chargen/template shifter/garou   Start chargen as Garou
-  +chargen/set breed=homid          Set breed to Homid
-  +chargen/set tribe=Black Furies   Set tribe (fuzzy match)
-  +chargen/set Strength=3           Assign 3 extra dots to Strength
-  +chargen/set Strength.specialty=Lifting  Assign a specialty
-  +chargen/priority attrs=physical/social/mental
-  +chargen/priority abilities=talents/skills/knowledges
-  +chargen/spend Gnosis=1           Buy 1 extra Gnosis dot with freebies
-  +chargen/notes/set bg=My backstory text here
-  +chargen/notes/list               List all notes
-  +chargen/submit                   Submit for approval`,
+  +chargen
+  +chargen/done
+  +chargen/submit`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();
@@ -395,35 +389,140 @@ Examples:
       return;
     }
 
+    // -- /done (finish freebies with leftover OK) ------------------------------
+    if (sw === "done") {
+      if (!canEdit) {
+        u.send(`%crYour character is ${char.status}.%cn`);
+        return;
+      }
+      const result = applyFreebiesDone(
+        char as unknown as Parameters<typeof applyFreebiesDone>[0],
+      );
+      if (!result.ok) {
+        u.send(`%cr${result.message}%cn`);
+        return;
+      }
+      await saveChar(char as NonNullable<typeof char>);
+      u.send(result.message);
+      if (result.budget) u.send(await formatBudget(result.budget));
+      return;
+    }
+
     // -- /freebies ------------------------------------------------------------
     if (sw === "freebies") {
       const log = char.freebiesLog;
       if (log.length === 0) {
-        u.send(`No freebie points spent. Remaining: %ch${char.freebiesRemaining}%cn`);
+        u.send(
+          `No freebie points spent yet.%r` +
+            `Remaining: %ch${char.freebiesRemaining}%cn  -- ` +
+            `use %ch+chargen/spend <trait>=n%cn or %ch+chargen/done%cn.`,
+        );
         return;
       }
       const lines = [header(" Freebie Points ")];
       log.forEach((e) => {
-        const traitLabel = e.trait.length > 24 ? e.trait.slice(0, 23) + "..." : e.trait;
-        lines.push(`  ${traitLabel.padEnd(24)} +${e.dots} dots  (${e.cost} pts)`);
+        const rest = ` +${e.dots} dots  (${e.cost} pts)`;
+        const nameW = Math.max(8, WIDTH - 2 - vlen(rest));
+        lines.push(
+          `  ${padVis(String(e.trait), nameW)}${rest}`,
+        );
       });
       lines.push(divider(null));
-      lines.push(`Remaining: %ch${char.freebiesRemaining}%cn`);
+      lines.push(
+        clipVis(
+          `Remaining: %ch${char.freebiesRemaining}%cn`,
+          WIDTH,
+        ),
+      );
       lines.push(footer());
       u.send(lines.join("%r"));
       return;
     }
 
     // -- /giftlist ------------------------------------------------------------
+    // Default: beginning gifts only. "all" or a rank number = full table.
     if (sw === "giftlist") {
-      u.send(await formatGiftList(char as unknown as Parameters<typeof formatGiftList>[0], arg || undefined));
+      const raw = (arg || "").trim().toLowerCase();
+      let pool: string | undefined;
+      let rank: number | "all" | undefined;
+      if (raw === "all") {
+        rank = "all";
+      } else if (/^[1-5]$/.test(raw)) {
+        rank = parseInt(raw, 10);
+      } else if (raw) {
+        // "breed" | "auspice" | "tribe" or "breed all"
+        const parts = raw.split(/\s+/);
+        pool = parts[0];
+        if (parts[1] === "all") rank = "all";
+        else if (parts[1] && /^[1-5]$/.test(parts[1])) {
+          rank = parseInt(parts[1], 10);
+        }
+      }
+      u.send(await formatGiftList(
+        char as unknown as Parameters<typeof formatGiftList>[0],
+        pool,
+        rank,
+      ));
+      return;
+    }
+
+    // -- /bglist | /backgrounds -----------------------------------------------
+    if (sw === "bglist" || sw === "backgrounds" || sw === "bg") {
+      const all = (arg || "").trim().toLowerCase() === "all";
+      u.send(await formatBackgroundList(
+        char as unknown as Parameters<typeof formatBackgroundList>[0],
+        { all },
+      ));
       return;
     }
 
     // -- /traits --------------------------------------------------------------
+    // Default: only traits settable at the current step gate.
     if (sw === "traits") {
-      const names = allTraitNames(char as unknown as Parameters<typeof allTraitNames>[0]);
-      u.send(`%chValid traits:%cn%r${names.join(", ")}`);
+      const showAll = (arg || "").trim().toLowerCase() === "all";
+      const names = allTraitNames(
+        char as unknown as Parameters<typeof allTraitNames>[0],
+      );
+      const filtered = showAll
+        ? names
+        : names.filter((n) => {
+          const res = resolveTrait(
+            char as unknown as Parameters<typeof resolveTrait>[0],
+            n,
+          );
+          return res.found && canAccessStep(
+            char as unknown as Parameters<typeof canAccessStep>[0],
+            res.step,
+          );
+        });
+      const title = showAll
+        ? " Valid Traits (all) "
+        : " Valid Traits (available now) ";
+      const lines = [header(title)];
+      if (filtered.length === 0) {
+        lines.push("  None available — finish the prior step first.");
+      } else {
+        let row = "  ";
+        for (const name of filtered) {
+          const piece = row === "  " ? name : `, ${name}`;
+          if (vlen(row) + vlen(piece) > WIDTH) {
+            lines.push(row);
+            row = `  ${name}`;
+          } else {
+            row += piece;
+          }
+        }
+        if (row.trim()) lines.push(row);
+      }
+      lines.push(divider(null));
+      if (!showAll) {
+        lines.push(clipVis(
+          "  Full list: %ch+chargen/traits all%cn",
+          WIDTH,
+        ));
+      }
+      lines.push(footer());
+      u.send(lines.join("%r"));
       return;
     }
 
@@ -462,7 +561,12 @@ Examples:
         tribe: char.tribe,
         concept: char.concept,
       });
-      u.send("%chCharacter submitted for staff review!%cn Staff will be in touch soon.");
+      u.send(
+        "%chCharacter submitted for staff review!%cn%r" +
+          "This is a chargen queue entry (not a +job).%r" +
+          "Staff will approve or deny; you will be notified.%r" +
+          "Type %ch+sheet%cn anytime to review your sheet.",
+      );
       const submitterName = u.util.displayName(u.me, u.me);
       const splatLabel = char.splat ?? "unknown";
       await notifyChargenChannel(
@@ -577,45 +681,27 @@ Examples:
 
     // -- /meritlist ------------------------------------------------------------
     if (sw === "meritlist") {
-      const splat = SplatRegistry.get(char.splat);
-      if (!splat?.merits?.length) {
-        u.send(`No merit list for ${splat?.name ?? char.splat}.`);
-        return;
-      }
-      const cat = arg.trim().toLowerCase();
-      const list = cat
-        ? splat.merits.filter((m) => m.category.toLowerCase() === cat)
-        : splat.merits;
-      if (!list.length) { u.send(`No merits in category "${arg}".`); return; }
-      const lines = [header(` Merits -- ${splat.name} `)];
-      for (const m of list) {
-        const notesText = (m.notes ?? "").slice(0, 30);
-        lines.push(`  %ch${m.name}%cn (${m.cost} pt, ${m.category})  ${notesText}`);
-      }
-      lines.push(footer());
-      u.send(lines.join("%r"));
+      const parts = arg.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const all = parts.includes("all");
+      const cat = parts.find((p) => p !== "all") ?? "";
+      u.send(formatMeritList(
+        char as unknown as Parameters<typeof formatMeritList>[0],
+        cat || undefined,
+        { all },
+      ));
       return;
     }
 
     // -- /flawlist -------------------------------------------------------------
     if (sw === "flawlist") {
-      const splat = SplatRegistry.get(char.splat);
-      if (!splat?.flaws?.length) {
-        u.send(`No flaw list for ${splat?.name ?? char.splat}.`);
-        return;
-      }
-      const cat = arg.trim().toLowerCase();
-      const list = cat
-        ? splat.flaws.filter((f) => f.category.toLowerCase() === cat)
-        : splat.flaws;
-      if (!list.length) { u.send(`No flaws in category "${arg}".`); return; }
-      const lines = [header(` Flaws -- ${splat.name} `)];
-      for (const f of list) {
-        const notesText = (f.notes ?? "").slice(0, 30);
-        lines.push(`  %ch${f.name}%cn (+${f.bonus} pt, ${f.category})  ${notesText}`);
-      }
-      lines.push(footer());
-      u.send(lines.join("%r"));
+      const parts = arg.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const all = parts.includes("all");
+      const cat = parts.find((p) => p !== "all") ?? "";
+      u.send(formatFlawList(
+        char as unknown as Parameters<typeof formatFlawList>[0],
+        cat || undefined,
+        { all },
+      ));
       return;
     }
 
@@ -711,7 +797,31 @@ Examples:
         return;
       }
 
-      u.send(`Unknown notes sub-command "${subSw}". Valid: set, clear, public, list`);
+      if (subSw === "private") {
+        const name = u.util.stripSubs(rest).trim();
+        if (!name) {
+          u.send("Usage: +chargen/notes private <name>");
+          return;
+        }
+        const result = setNotePublic(
+          char as unknown as Parameters<typeof setNotePublic>[0],
+          name,
+          false,
+        );
+        if (!result.ok) {
+          u.send(`%cr${result.message}%cn`);
+          return;
+        }
+        await saveChar(char as NonNullable<typeof char>);
+        u.send(result.message);
+        return;
+      }
+
+      u.send(
+        `Unknown notes sub-command "${subSw}". ` +
+          `Prefer %ch+notes%cn (see +help notes). ` +
+          `Or: set, clear, public, private, list`,
+      );
       return;
     }
 
@@ -723,23 +833,33 @@ async function formatTemplatePicker(): Promise<string> {
   const lines: string[] = [
     header(" Character Generation -- Choose a Template "),
     "",
-    "  %cwChoose the template that best fits your character concept:%cn",
+    clipVis(
+      "  %cwChoose the template that best fits your " +
+        "character concept:%cn",
+      WIDTH,
+    ),
     divider(null),
   ];
   for (const [key, tmpl] of Object.entries(TEMPLATES)) {
-    const keyCol  = `%ch%cy${key}%cn` + " ".repeat(Math.max(0, 12 - key.length));
+    const keyCol = padVis(`%ch%cy${key}%cn`, 12);
+    const prefix = `    %cg>%cn ${keyCol}  `;
     const descStr = "subtypes" in tmpl
       ? `%ch${tmpl.label}%cn  %cw-%cn  choose a type in the next step`
       : `%ch${tmpl.label}%cn  %cw-%cn  ${tmpl.desc}`;
-    lines.push(`    %cg>%cn ${keyCol}  ${descStr}`);
+    const room = Math.max(0, WIDTH - vlen(prefix));
+    lines.push(prefix + clipVis(descStr, room));
   }
   lines.push("");
-  lines.push("  %cwType:%cn %ch%cc+chargen/template <name>%cn");
+  lines.push(
+    clipVis("  %cwType:%cn %ch%cc+chargen/template <name>%cn", WIDTH),
+  );
   lines.push(footer());
   return lines.join("%r");
 }
 
-async function formatSubtypePicker(templateKey: TemplateKey): Promise<string> {
+async function formatSubtypePicker(
+  templateKey: TemplateKey,
+): Promise<string> {
   const tmpl = TEMPLATES[templateKey];
   if (!("subtypes" in tmpl)) return "";
   const lines: string[] = [
@@ -747,11 +867,17 @@ async function formatSubtypePicker(templateKey: TemplateKey): Promise<string> {
     "",
   ];
   for (const [key, sub] of Object.entries(tmpl.subtypes)) {
-    const keyCol = `%ch%cy${key}%cn` + " ".repeat(Math.max(0, 12 - key.length));
-    lines.push(`    %cg>%cn ${keyCol}  %ch${sub.label}%cn  %cw-%cn  ${sub.desc}`);
+    const keyCol = padVis(`%ch%cy${key}%cn`, 12);
+    const prefix = `    %cg>%cn ${keyCol}  `;
+    const descStr = `%ch${sub.label}%cn  %cw-%cn  ${sub.desc}`;
+    const room = Math.max(0, WIDTH - vlen(prefix));
+    lines.push(prefix + clipVis(descStr, room));
   }
   lines.push("");
-  lines.push(`  %cwType:%cn %ch%cc+chargen/template ${templateKey}/<type>%cn`);
+  lines.push(clipVis(
+    `  %cwType:%cn %ch%cc+chargen/template ${templateKey}/<type>%cn`,
+    WIDTH,
+  ));
   lines.push(footer());
   return lines.join("%r");
 }

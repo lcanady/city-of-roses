@@ -271,61 +271,16 @@ addCmd({
   pattern: /^@eq(?:\/(\S+))?\s*([^=]*?)(?:\s*=\s*(.*))?$/i,
   lock: "connected",
   category: "Building",
-  help: `@eq/<field> <item>=<value>  -- Set equipment metadata or display attrs.
+  help: `@eq/<field> <item>=<value>  — Equipment fields and templates.
 
-SYNTAX
-  @eq/<field> <item>=<value>                Set one field.
-  @eq/clear <item>                          Delete all mechanical eq fields.
-  @eq/copy <item>=<template>                Save an item's eq definition as a template.
-  @eq/give <item>=<template>                Apply a stored template's fields to an existing item.
-  @eq/new <template>=<name>                 Spawn a brand-new item from a template.
-  @eq/template                              List stored templates.
-  @eq/template <name>                       Show a template's stored fields.
-  @eq/template delete <name>                Delete a template.
+  Set kind, damage, armor, verbs, name, desc; copy/give templates.
 
-You must be able to edit the item.
+  Full help: +help eq
 
-TEMPLATES
-  @eq/copy captures the item's eq fields (kind, damage, armor, verbs, name,
-  desc). @eq/give stamps those onto an existing object you can edit;
-  @eq/new creates a fresh thing in your inventory with those fields. Live-
-  state flags (worn/wielded/concealed/fetishActive/talenSpent) are NOT copied.
-
-MECHANICAL FIELDS  (aliases in parens)
-  kind                  weapon|armor|shield|fetish|tool|misc
-  weaponType  /wt /type brawl|melee|firearms|thrown
-  damage                non-negative integer
-  damageType  /dt       B|L|A
-  silver                true|false
-  fetish                true|false
-  fetishCost  /fcost    non-negative integer (Gnosis)
-  fetishDesc  /fdesc    free text (shown by +fetish/info)
-  armorRating /armor    non-negative integer
-  concealability /con   P|J|T|N
-
-DISPLAY + VERB ATTRS
-  name                  Item name. e.g. "Edge-Lord's Kiss"
-  desc                  Item description (the @desc text).
-  succ                  Shown to the user on a successful use.
-  osucc                 Shown to the room on a successful use.
-  fail                  Shown to the user on a failed use.
-  ofail                 Shown to the room on a failed use.
-  use                   Shown to the user when the item is invoked.
-  ouse                  Shown to the room when the item is invoked.
-
-EXAMPLES
-  @eq/name silver klaive=Edge-Lord's Kiss
-  @eq/desc silver klaive=A klaive of iron and silver that hums.
-  @eq/succ silver klaive=The blade sings its hunger back to you.
-  @eq/osucc silver klaive='s klaive hums with an answering note.
-  @eq/damage silver klaive=4
-  @eq/clear sword
-  @eq/copy silver klaive=silver-klaive
-  @eq/new silver-klaive=another silver klaive
-  @eq/give loot sword=silver-klaive
-  @eq/template
-
-SEE ALSO: +help wear, +help wield, +help wod20th`,
+Examples:
+  @eq/damage klaive=4
+  @eq/copy klaive=silver-klaive
+  @eq/new silver-klaive=my klaive`,
 
   exec: async (u: IUrsamuSDK) => {
     const rawSw    = (u.cmd.args[0] ?? "").toLowerCase().trim();

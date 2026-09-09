@@ -163,24 +163,10 @@ addCmd({
   category: "Werewolf",
   help: `+litany[/switch] [<args>]  -- The thirteen laws of the Garou.
 
-SYNTAX
-  +litany                          List the 13 laws.
-  +litany/list                     Same as above.
-  +litany/info <law-slug>          Full text + penalty.
-  +litany/charge <target>=<slug>/<reason>
-                                   File an accusation (Rank 1+, WtA only).
-  +litany/pending [<target>]       Show open charges (default: self).
-  +litany/uphold <id>              (Staff) Sustain a charge; apply penalty.
-  +litany/dismiss <id>             (Staff) Reject a charge; -0.5 Honor accuser.
-  +litany/withdraw <id>            (Accuser) Pull your charge before resolution.
+  Full help: +help litany
 
-EXAMPLES
-  +litany/info law-9
-  +litany/charge Cassidy=law-9/Shifted to Crinos in the parking lot.
-  +litany/pending Cassidy
-  +litany/uphold 0a1b2c3d
-
-SEE ALSO: +help renown, +help sept`,
+Examples:
+  +help litany`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

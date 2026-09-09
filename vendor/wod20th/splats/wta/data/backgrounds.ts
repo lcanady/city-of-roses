@@ -32,6 +32,12 @@ export interface IBackgroundDef {
   restrictedTo?: string[];
   /** Optional design/lore note shown in +background/info. */
   notes?: string;
+  /**
+   * Recommend a free-text focus (who/what). Stored on
+   * char.backgroundDetails[name]. Not required to set dots.
+   */
+  needsDetail?: boolean;
+  detailLabel?: string;
 }
 
 const bg = (
@@ -41,6 +47,7 @@ const bg = (
   dots: IBackgroundDef["dots"],
   restrictedTo?: string[],
   notes?: string,
+  extra?: { needsDetail?: boolean; detailLabel?: string },
 ): IBackgroundDef => ({
   slug,
   name,
@@ -48,6 +55,8 @@ const bg = (
   dots,
   ...(restrictedTo ? { restrictedTo } : {}),
   ...(notes ? { notes } : {}),
+  ...(extra?.needsDetail ? { needsDetail: true } : {}),
+  ...(extra?.detailLabel ? { detailLabel: extra.detailLabel } : {}),
 });
 
 export const WTA_BACKGROUNDS: Record<string, IBackgroundDef> = {
@@ -63,6 +72,9 @@ export const WTA_BACKGROUNDS: Record<string, IBackgroundDef> = {
       4: "Powerful and far-reaching; allies in multiple cities or fields.",
       5: "International or institutional -- allies whose names open doors.",
     },
+    undefined,
+    undefined,
+    { needsDetail: true, detailLabel: "who (names/roles)" },
   ),
 
   "ancestors": bg(
@@ -95,6 +107,9 @@ export const WTA_BACKGROUNDS: Record<string, IBackgroundDef> = {
       4: "Four major contacts.",
       5: "Five major contacts; minor contacts everywhere.",
     },
+    undefined,
+    undefined,
+    { needsDetail: true, detailLabel: "field or names" },
   ),
 
   "fetish": bg(
@@ -143,6 +158,7 @@ export const WTA_BACKGROUNDS: Record<string, IBackgroundDef> = {
     undefined,
     "Shadow Lords are discouraged from Mentor (their politics make trust " +
     "expensive). Glass Walkers similarly discouraged.",
+    { needsDetail: true, detailLabel: "who" },
   ),
 
   "past-life": bg(

@@ -64,6 +64,12 @@ export const ATTRIBUTE_SPECIALTY_SUGGESTIONS: Readonly<Record<AttributeName, str
 export const ATTR_CATEGORY_NAMES: readonly AttributeGroup[] = ["physical", "social", "mental"];
 export const ABIL_CATEGORY_NAMES: readonly AbilityGroup[]   = ["talents", "skills", "knowledges"];
 
+/**
+ * Permanent attribute floor. Chargen records store *extra* dots above
+ * this base; +chargen/set Strength=3 means final rating 3 → store 2.
+ */
+export const ATTR_BASE = 1;
+
 /** Attribute allocation: extra dots above base-1 per priority tier. */
 export const ATTR_ALLOC = { primary: 7, secondary: 5, tertiary: 3 } as const;
 
@@ -71,9 +77,8 @@ export const ATTR_ALLOC = { primary: 7, secondary: 5, tertiary: 3 } as const;
 export const ABIL_ALLOC = { primary: 13, secondary: 9, tertiary: 5 } as const;
 
 /**
- * Effective attribute dots for a character: base rating (VtM characters
- * start all attributes at base 1; the chargen record stores extra dots)
- * plus any blood-buff bonus (VtM physical buffs), floored at 0.
+ * Effective attribute dots: ATTR_BASE + stored extra + blood-buff.
+ * Chargen/DB store extras; rolls and sheets use this total.
  */
 export function effectiveAttr(
   char: {
@@ -83,11 +88,11 @@ export function effectiveAttr(
   name: string,
 ): number {
   const q = name.toLowerCase();
-  // Chargen stores extra dots above the WoD base 1 (see core/combat.ts).
-  let base = 1;
+  // Chargen stores extra dots above ATTR_BASE.
+  let base = ATTR_BASE;
   for (const [k, v] of Object.entries(char.attributes ?? {})) {
     if (k.toLowerCase() === q && typeof v === "number") {
-      base = 1 + v;
+      base = ATTR_BASE + v;
       break;
     }
   }
@@ -123,16 +128,34 @@ export function abilGroup(name: string): AbilityGroup | undefined {
   return undefined;
 }
 
-/** Returns the canonical (correctly-cased) attribute name, or undefined. */
+/**
+ * Canonical attribute name. Exact match first, then unique prefix
+ * (e.g. "dex" → Dexterity, "str" → Strength). Ambiguous prefixes miss.
+ */
 export function canonicalAttr(name: string): AttributeName | undefined {
-  const lower = name.toLowerCase();
-  return ALL_ATTRIBUTES.find((a) => a.toLowerCase() === lower);
+  const lower = name.toLowerCase().trim();
+  if (!lower) return undefined;
+  const exact = ALL_ATTRIBUTES.find((a) => a.toLowerCase() === lower);
+  if (exact) return exact;
+  const hits = ALL_ATTRIBUTES.filter((a) =>
+    a.toLowerCase().startsWith(lower)
+  );
+  return hits.length === 1 ? hits[0] : undefined;
 }
 
-/** Returns the canonical (correctly-cased) ability name, or undefined. */
+/**
+ * Canonical ability name. Exact match first, then unique prefix
+ * (e.g. "ath" → Athletics). Ambiguous prefixes miss.
+ */
 export function canonicalAbil(name: string): AbilityName | undefined {
-  const lower = name.toLowerCase();
-  return ALL_ABILITIES.find((a) => a.toLowerCase() === lower);
+  const lower = name.toLowerCase().trim();
+  if (!lower) return undefined;
+  const exact = ALL_ABILITIES.find((a) => a.toLowerCase() === lower);
+  if (exact) return exact;
+  const hits = ALL_ABILITIES.filter((a) =>
+    a.toLowerCase().startsWith(lower)
+  );
+  return hits.length === 1 ? hits[0] : undefined;
 }
 
 /** Levenshtein distance for "did you mean?" suggestions. */

@@ -3,6 +3,7 @@ import "./splats/vtm/index.ts";
 import "./splats/mortal/index.ts";
 import "./splats/kinfolk/index.ts";
 import "./commands/chargen.ts";
+import "./commands/notes.ts";
 import "./commands/roll.ts";
 import "./commands/deedname.ts";
 import "./commands/desc.ts";

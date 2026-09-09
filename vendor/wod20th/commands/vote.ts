@@ -50,26 +50,10 @@ addCmd({
   category: "Roleplay",
   help: `+vote <target>=<reason>  -- Reward another character for great RP.
 
-  Small trickle of XP per vote. Caps stop circle-jerking:
-    * Per vote:    +${VOTE_XP_AMOUNT} XP (five votes = 1 XP)
-    * Daily cap:   ${DAILY_VOTE_CAP} votes per 24h  (safety ceiling)
-    * Per target:  max ${PER_PAIR_WEEKLY_LIMIT} votes per target per 7 days
-    * Reason:      required, at least 10 chars
-    * Scene gate:  target must have posed at least ${MIN_POSES_FOR_VOTE}
-                   times in this room (no drive-by vote farming)
+  Full help: +help vote
 
-SYNTAX
-  +vote <target>=<reason>       Cast a vote.
-  +vote/all [<reason>]          Vote every eligible player in the room.
-  +vote/log                     Show your recent votes.
-  +vote/status                  Show your daily cap + cooldowns.
-
-EXAMPLES
-  +vote Storms=Phenomenal scene in the caern with the spirits.
-  +vote/all Great session everyone, thank you.
-  +vote/status
-
-SEE ALSO: +help xp, +help wod20th`,
+Examples:
+  +help vote`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw  = (u.cmd.args[0] ?? "").toLowerCase().trim();

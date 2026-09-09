@@ -67,23 +67,10 @@ addCmd({
   category: "Vampire",
   help: `+blood[/switch] [<args>]  -- View or change your Blood Pool.
 
-SYNTAX
-  +blood                    Show current/max Blood and per-turn cap.
-  +blood/spend <n>          Spend <n> BP (max = bloodPerTurn).
-  +blood/heal [<n>]         Heal n B/L boxes (1 BP each; default 1).
-  +blood/heal/agg [<n>]     Heal 1 agg box (5 BP; pool only).
-  +blood/buff <str|dex|sta> Raise Physical +1 (1 BP; scene).
-  +blood/buff/clear         End blood buffs.
-  +blood/feed [<n>]         Quick regain (no vessel). Prefer +feed.
-  +blood/regain <n>         Alias of /feed (no pose).
-  +blood/set <n> <tgt>      Staff: set current Blood (0..bloodMax).
+  Full help: +help blood
 
-EXAMPLES
-  +blood/buff strength
-  +blood/heal/agg
-  +blood/spend 1
-
-SEE ALSO: +help feed, +help discipline, +help beast`,
+Examples:
+  +help blood`,
 
   exec: async (u: IUrsamuSDK) => {
     const sw = (u.cmd.args[0] ?? "").toLowerCase().trim();

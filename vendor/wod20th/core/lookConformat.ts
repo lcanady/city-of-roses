@@ -1,26 +1,27 @@
-// core/lookConformat.ts -- CONFORMAT matching CoFD look_format.ts.
+// core/lookConformat.ts -- CONFORMAT player/thing rows for look.
 //
-// Player row (exact CoFD pads):
-//   " " + name(dbref) + pad->21 + role + pad->13 + idle + pad->4 + short-desc
-// short-desc is truncated so the row fits the looker's NAWS width (else 78).
-// Name/role/idle are NOT clipped to column width (CoFD behavior).
+// Player row (fixed cells, ≤78-col hard cap):
+//   " " + name clip 25 + role clip 8 + idle clip 4 + short-desc
+// short-desc is one line, truncated to remaining width.
+// NAWS never widens CONFORMAT past 78.
 
 import type { IUrsamuSDK, IDBObj } from "@ursamu/mush";
-import { divider, dbrefWithFlags } from "@ursamu/mush";
+import { divider, dbrefWithFlags, getConfig } from "@ursamu/mush";
 import {
   lookerWidth,
   visualLen,
   visualTruncate,
+  DEFAULT_LOOK_WIDTH,
 } from "./lookWidth.ts";
 import { getEqMeta } from "./eq.ts";
 
-/** Same targets as packages/cofd look_format.ts */
-const NAME_W = 21;
-const ROLE_W = 13;
+/** Name 25 cols; short-desc fills rest (clipped to width). */
+const NAME_W = 25;
+const ROLE_W = 8;
 const IDLE_W = 4;
 
-const SHORTDESC_PROMPT =
-  "%ch%cxUse '&short-desc me=<desc>' to set.%cn";
+// Keep short — long prompt overflows narrow terminals.
+const SHORTDESC_PROMPT = "%ch%cx&short-desc me=<desc>%cn";
 
 const ROLE_TAGS = [
   { flag: "wizard", display: "(Wizard)" },
@@ -93,15 +94,40 @@ function getCharShortDesc(obj: IDBObj): string {
 
 function roleTag(obj: IDBObj): string {
   if (obj.flags.has("npc")) return "(NPC)";
-  for (const t of ROLE_TAGS) {
+  let tags = ROLE_TAGS;
+  try {
+    // Prefer game config (roses uses <Root>, etc.).
+    const configured = getConfig<
+      Array<{ flag: string; display: string }>
+    >("plugins.globals.theme.look.roleTags");
+    if (Array.isArray(configured) && configured.length > 0) {
+      tags = configured;
+    }
+  } catch {
+    /* config unavailable — built-in tags */
+  }
+  for (const t of tags) {
     if (obj.flags?.has(t.flag)) return t.display;
   }
   return "";
 }
 
-/** CoFD pad: at least 1 space, target column width. No clip. */
-function padTo(s: string, target: number): string {
-  return s + " ".repeat(Math.max(1, target - visualLen(s)));
+/** Pad or clip to a fixed visible width (keeps columns aligned). */
+function padClip(s: string, target: number): string {
+  const raw = String(s ?? "");
+  const len = visualLen(raw);
+  if (len === target) return raw;
+  if (len > target) return visualTruncate(raw, target);
+  return raw + " ".repeat(target - len);
+}
+
+/** Short-desc stays on one line — no %r / newline wrap. */
+function oneLineDesc(desc: string): string {
+  return String(desc ?? "")
+    .replace(/%r/gi, " ")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/ +/g, " ")
+    .trim();
 }
 
 function formatPlayerRow(
@@ -117,15 +143,15 @@ function formatPlayerRow(
   const idle = isNpc
     ? ""
     : formatIdle(c.state?.lastCommand as number | undefined);
-  const desc = getCharShortDesc(c) ||
-    (isNpc ? "" : SHORTDESC_PROMPT);
+  const desc = oneLineDesc(
+    getCharShortDesc(c) || (isNpc ? "" : SHORTDESC_PROMPT),
+  );
   const nameWithRef = nameWithDbref(cName, c, looker, canEdit);
 
-  // Exact CoFD look_format.ts padding (no clip on name/role/idle).
-  const namePad = padTo(nameWithRef, NAME_W);
-  const rolePad = padTo(role, ROLE_W);
-  const idlePad = padTo(idle, IDLE_W);
-  const prefix = ` ${namePad}${rolePad}${idlePad}`;
+  const prefix =
+    ` ${padClip(nameWithRef, NAME_W)}` +
+    `${padClip(role, ROLE_W)}` +
+    `${padClip(idle, IDLE_W)}`;
   const prefixLen = visualLen(prefix);
   if (prefixLen >= width) {
     return visualTruncate(prefix.replace(/\s+$/, ""), width);
@@ -181,7 +207,8 @@ export async function wodConformatHandler(
     .filter((o): o is IDBObj => o != null);
 
   const looker = u.me;
-  const width = lookerWidth(looker);
+  // 78-char rule: never let NAWS expand CONFORMAT rows past 78.
+  const width = Math.min(lookerWidth(looker), DEFAULT_LOOK_WIDTH);
 
   const people = visible.filter(
     (o) =>
